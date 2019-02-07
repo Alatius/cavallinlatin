@@ -1,2 +1,10 @@
-sudo apt-get install build-essential libgtkmm-3.0-dev libfftw3-dev
+To install on Ubuntu:
+
+sudo apt install build-essential libtool-bin libgtkmm-3.0-dev libfftw3-dev
+./autogen.sh
+make
+
+To run:
+
+src/terese
 
