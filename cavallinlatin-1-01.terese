@@ -9119,6 +9119,7 @@ relſe, förlikning ſkedde),</s> se in possessionem</rtml>
 <type c=";" s="4" v="2" targetchar=";" targetstyle="0" targetvar="2"/>
 <type c=";" s="4" v="3" targetchar=";" targetstyle="0" targetvar="3"/>
 <type c="=" s="4" v="0" targetchar="=" targetstyle="0" targetvar="0"/>
+<type c="J" s="4" v="0" targetchar="I" targetstyle="4" targetvar="0"/>
 <type c="ç" s="4" v="0" targetchar="ç" targetstyle="0" targetvar="0"/>
 <type c="ë" s="4" v="0" targetchar="ë" targetstyle="0" targetvar="0"/>
 <type c="!" s="5" v="0" targetchar="!" targetstyle="0" targetvar="0"/>
@@ -9183,6 +9184,7 @@ relſe, förlikning ſkedde),</s> se in possessionem</rtml>
 <type c=";" s="6" v="1" targetchar=";" targetstyle="0" targetvar="1"/>
 <type c=";" s="6" v="2" targetchar=";" targetstyle="0" targetvar="2"/>
 <type c=";" s="6" v="3" targetchar=";" targetstyle="0" targetvar="3"/>
+<type c="J" s="6" v="0" targetchar="I" targetstyle="6" targetvar="0"/>
 <type c="”" s="6" v="0" targetchar="”" targetstyle="4" targetvar="0"/>
 <type c="," s="9" v="0" targetchar="," targetstyle="8" targetvar="0"/>
 <type c="," s="9" v="1" targetchar="," targetstyle="8" targetvar="1"/>
