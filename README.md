@@ -33,15 +33,14 @@ Följande procedur rekommenderas vid korrekturläsandet:
 4. Korrigera eventuella återstående skillnader mellan den digitala texten och bilden som du kan upptäcka. Du kan behöva göra detta iterativt, och trycka `F5` flera gånger, och eventuellt även flytta tecken en aning med `ctrl` + dubbelklick, om Terese tappar bort sig.
 5. När du är nöjd, välj nästa bild i listan uppe till vänster. Det kan vara en god idé att ha för vana att spara filen nu. Gå till steg 2.
 6. När du är klar med hela filen (och gärna även med jämna mellanrum dessförinnan, t.ex. en gång i veckan), ladda upp dina ändringar till GitHub:
-
-`git add cavallinlatin-X-XX.terese`
-`git commit -m "Kolumn X-XXX klar."`
+`git add cavallinlatin-X-XX.terese`,
+`git commit -m "Kolumn X-XXXX klar."`,
 `git push`
 
 Diverse detaljer att ha i åtanke:
 
 * Terese har ingen ångrafunktion. Ha därför för vana att spara filen med jämna mellanrum.
-* Texten innehåller en del tecken som kan vara besvärliga att skriva med tangentbordet. De vanligaste är: `āēīōūȳ ăĕĭŏŭỳ ā̆ē̆ī̆ō̆ū̆ȳ̆ ĀĒĪŌŪȲ ĂĔĬŎŬỲ Ā̆Ē̆Ī̆Ō̆Ū̆Ȳ̆ æſß —`. Därtill kommer naturligtvit alla grekiska tecken...
+* Texten innehåller en del tecken som kan vara besvärliga att skriva med tangentbordet. De vanligaste är: `āēīōūȳ ăĕĭŏŭỳ ā̆ē̆ī̆ō̆ū̆ȳ̆ ĀĒĪŌŪȲ ĂĔĬŎŬỲ Ā̆Ē̆Ī̆Ō̆Ū̆Ȳ̆ æſßɔ —`. Därtill kommer naturligtvit alla grekiska tecken...
 * Av historisk och teknisk anledning använder jag `ỳ` och `Ỳ` istället för `y̆` och `Y̆`.
 * Tecknet `ſ` (långt s) visas som identiskt med `s` i detta projekts version av DPCustomMono2, för att underlätta korrekturläsningen. 
 
