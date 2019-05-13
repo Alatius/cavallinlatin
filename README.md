@@ -55,7 +55,7 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 
 - [ ] cavallinlatin-1-00.terese Alatius
 - [x] cavallinlatin-1-01.terese Alatius
-- [ ] cavallinlatin-1-02.terese Alatius
+- [x] cavallinlatin-1-02.terese Alatius
 - [ ] cavallinlatin-1-03.terese
 - [ ] cavallinlatin-1-04.terese
 - [ ] cavallinlatin-1-05.terese
