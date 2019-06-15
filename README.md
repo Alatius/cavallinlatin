@@ -53,10 +53,10 @@ Dessa instruktioner kan med största sannolikhet komma att utökas och förtydli
 
 Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller kommentar betyder att filen är ledig och redo att korrekturläsas av vemhelst som känner sig hågad.
 
-- [ ] cavallinlatin-1-00.terese Alatius
+- [x] cavallinlatin-1-00.terese Alatius
 - [x] cavallinlatin-1-01.terese Alatius
 - [x] cavallinlatin-1-02.terese Alatius
-- [ ] cavallinlatin-1-03.terese
+- [ ] cavallinlatin-1-03.terese Alatius
 - [ ] cavallinlatin-1-04.terese
 - [ ] cavallinlatin-1-05.terese
 - [ ] cavallinlatin-1-06.terese
