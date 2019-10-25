@@ -4,7 +4,7 @@
   <style id="2" name="Bold" prefix="@" tag="b" font="Bold" background="yellow" foreground="" shortcut="&lt;control&gt;b"/>
   <style id="4" name="Fraktur" prefix="#" tag="s" font="" background="lightblue" foreground="" shortcut="&lt;control&gt;j"/>
   <style id="8" name="Spärrad" prefix="£" tag="sp" font="" background="" foreground="red" shortcut="&lt;control&gt;k"/>
-  <page path="columns/cavlat-2-0500.tiff">
+  <page path="columns/cavlat-2-0500.tiff" active="true">
 <rtml>
 Quattuor, Quadro 500
 
@@ -3788,7 +3788,38 @@ absolutus erit, q. erit denarius, qui non fe-
 rendus videatur?, C. (Verr. III. §. 220);
 q-a est hora (= <s>hwilken timma på dagen är
 det)?;</s> tu q-us esse velis <s>(huru manſtark</s> ɔ:
+</rtml>
+  </page>
+  <page path="columns/cavlat-2-0550.tiff">
+<rtml>
+Radius, Radio 550
+<s>med huru ſtort ſällſkap du kommer),</s> rescribe,
+iIor. (Ep. I. 5. 30.); q-a portio fæcis Achæi?,
 
+uv.
+
+<sp>Quŏtuscunque</sp>, <i>Pron. relat.</i>: <s><b>Huru ſtor</b>
+(huru liten) <b>än:</b></s> Tib.
+
+<sp>Quŏtusquisque</sp>, <i>Pron. interrog.</i> <s>(jfr</s>
+decimus quisque, <s>hwar tionde): <b>Huru mån-
+gen</b></s> - <s><b>wäl</b> (huru ſtor qvot af det hela hwar
+tionde l. tolfte o. d.)?</s> (= <s>huru få</s> - <s>icke?):</s>
+q. est, qui teneat artem modorum et nume-
+rorum?; q. philosophorum invenitur, qui ita
+sit moratus, ut ratio postulat?, C.; quoto
+cuique lorica est?, Ct.; quotus enim quisque
+scholasticorum non hac sua persuasione frui-
+tur, ut se ante Ciceronem numeret, sed
+plane post Gabinianum?; quotumquemque
+invenias -?, T.
+
+Quovis <s>ſe</s> Quivis, Qui. - Quousque <s>ſe</s>
+Quo, Qui. — Quum <s>ſe</s> Quom.
+</rtml>
+  </page>
+  <page path="columns/cavlat-2-0549.tiff">
+<rtml>
 Rabid . . ., Rabies, Rabios . . . <s>ſe</s> Rabo.
 
 <b>R</b>ăbīrius, i, <i>m.</i>: <s>rom. ſlägtnamn.</s> - b <sp>iri</sp>-
@@ -3841,33 +3872,7 @@ mixta r-is, Ov.
 ofruktbar (gren):</s> Col. <sp>-cēmĭfer</sp>, <i>A.</i>: <s>ſom</s></rtml>
   </page>
   <page path="columns/cavlat-2-0550.tiff">
-<rtml>
-Radius, Radio 550
-<s>med huru ſtort ſällſkap du kommer),</s> rescribe,
-iIor. (Ep. I. 5. 30.); q-a portio fæcis Achæi?,
-
-uv.
-
-<sp>Quŏtuscunque</sp>, <i>Pron. relat.</i>: <s><b>Huru ſtor</b>
-(huru liten) <b>än:</b></s> Tib.
-
-<sp>Quŏtusquisque</sp>, <i>Pron. interrog.</i> <s>(jfr</s>
-decimus quisque, <s>hwar tionde): <b>Huru mån-
-gen</b></s> - <s><b>wäl</b> (huru ſtor qvot af det hela hwar
-tionde l. tolfte o. d.)?</s> (= <s>huru få</s> - <s>icke?):</s>
-q. est, qui teneat artem modorum et nume-
-rorum?; q. philosophorum invenitur, qui ita
-sit moratus, ut ratio postulat?, C.; quoto
-cuique lorica est?, Ct.; quotus enim quisque
-scholasticorum non hac sua persuasione frui-
-tur, ut se ante Ciceronem numeret, sed
-plane post Gabinianum?; quotumquemque
-invenias -?, T.
-
-Quovis <s>ſe</s> Quivis, Qui. - Quousque <s>ſe</s>
-Quo, Qui. — Quum <s>ſe</s> Quom.
-
-<s>bär drufklaſar l. drufwor:</s> uvæ; Bacchus r.,
+<rtml><s>bär drufklaſar l. drufwor:</s> uvæ; Bacchus r.,
 <s>druf- (winlöf-) kranſad,</s> Ov.
 
 <sp>Răcēmor</sp>, 1.: <i>Dep.</i>: <s><b>Plocka drufſtjelkar;</b>
