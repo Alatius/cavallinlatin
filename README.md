@@ -65,8 +65,8 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 - [ ] cavallinlatin-1-09.terese Alatius, grovrättad
 - [ ] cavallinlatin-1-10.terese Alatius, grovrättad
 - [ ] cavallinlatin-1-11.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-00.terese Alatius
-- [ ] cavallinlatin-2-01.terese
+- [ ] cavallinlatin-2-00.terese Alatius, grovrättad
+- [ ] cavallinlatin-2-01.terese Alatius
 - [ ] cavallinlatin-2-02.terese
 - [ ] cavallinlatin-2-03.terese
 - [ ] cavallinlatin-2-04.terese
