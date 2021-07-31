@@ -1,6 +1,6 @@
 # Latinskt lexicon
 
-This the repository for the digitizing the Latin-Swedish Lexicon by Christian Cavallin, specifically the proofreading of the OCR text. The project is initiated and administrated by Johan Winge (Alatius), johan.winge@gmail.com, who should be contacted if you have questions. The rest of this information is in Swedish, but anyone is invited to participate.
+This is the repository for the digitizing the Latin-Swedish Lexicon by Christian Cavallin, specifically the proofreading of the OCR text. The project is initiated and administrated by Johan Winge (Alatius), johan.winge@gmail.com, who should be contacted if you have questions. The rest of this information is in Swedish, but anyone is invited to participate.
 
 Hela boken (”Latinskt lexicon, till läroverkens tjenst, i etymologisk uppställning utarbetadt af Christian Cavallin.”) är inskannad från ett exemplar från den reviderade upplagan tryckt 1873. Titelsida, förord, och förkortningslista återfinns här under `frontmatter`. Den egentliga ordbokstexten är uppdelad i en bildfil per kolumn, och återfinns under `columns`.
 
@@ -75,8 +75,8 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 - [ ] cavallinlatin-2-07.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-08.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-09.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-10.terese Alatius
-- [ ] cavallinlatin-2-11.terese
+- [ ] cavallinlatin-2-10.terese Alatius, grovrättad
+- [ ] cavallinlatin-2-11.terese Alatius
 - [ ] cavallinlatin-2-12.terese
 - [ ] cavallinlatin-2-13.terese
 - [ ] cavallinlatin-2-14.terese
