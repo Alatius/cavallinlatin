@@ -42,7 +42,7 @@ Diverse detaljer att ha i åtanke:
 * Ta bort kolumnnummer och kolumnrubriker.
 * Indrag i ordboken betecknas med tomrad i OCR-texten. Lämna därför en tom första rad i texten om första raden i kolumnen är indragen.
 * Terese har ingen ångrafunktion. Ha därför för vana att spara filen med jämna mellanrum.
-* Texten innehåller en del tecken som kan vara besvärliga att skriva med tangentbordet. De vanligaste är: `āēīōūȳ ăĕĭŏŭỳ ā̆ē̆ī̆ō̆ū̆ȳ̆ ĀĒĪŌŪȲ ĂĔĬŎŬỲ Ā̆Ē̆Ī̆Ō̆Ū̆Ȳ̆ æſßɔ —⏑`. Därtill kommer naturligtvis alla grekiska tecken...
+* Texten innehåller en del tecken som kan vara besvärliga att skriva med tangentbordet. De vanligaste är: `āēīōūȳ ăĕĭŏŭỳ ā̆ē̆ī̆ō̆ū̆ȳ̆ ĀĒĪŌŪȲ ĂĔĬŎŬỲ Ā̆Ē̆Ī̆Ō̆Ū̆Ȳ̆ æſßɔ —⏑ †`. Därtill kommer naturligtvis alla grekiska tecken...
 * Av historisk och teknisk anledning använder jag `ỳ` och `Ỳ` istället för `y̆` och `Y̆`.
 * Tecknet `ſ` (långt s) visas som identiskt med `s` i detta projekts version av DPCustomMono2, för att underlätta korrekturläsningen.
 * Ibland är det uppenbara feltryck i ordboken, med enskilda tecken som blivit fel, t.ex. upp-och-nedvända bokstäver, bokstäver från fel teckensnitt, eller tecken som fallit bort. Rätta i så fall i OCR-texten; det är bättre att vår digitala text är korrekt, än att vi återskapar uppenbara fel i den gamla boken. Men, ändra _inte_ t.ex. stavningen, och skriv inte heller om texten. Ifall du hittar uppenbara felaktiga ord eller uppgifter, låt det stå som det är, men gör en anteckning någonstans, så kan vi ta itu med det när det är dags att publicera texten. 
@@ -77,8 +77,8 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 - [ ] cavallinlatin-2-09.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-10.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-11.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-12.terese Alatius
-- [ ] cavallinlatin-2-13.terese
+- [ ] cavallinlatin-2-12.terese Alatius, grovrättad
+- [ ] cavallinlatin-2-13.terese Alatius
 - [ ] cavallinlatin-2-14.terese
 
 ![Two errors identified](exempel2.png)
