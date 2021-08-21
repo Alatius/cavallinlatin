@@ -79,7 +79,7 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 - [ ] cavallinlatin-2-11.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-12.terese Alatius, grovrättad
 - [ ] cavallinlatin-2-13.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-14.terese Alatius
+- [ ] cavallinlatin-2-14.terese Alatius, grovrättad
 
 ![Two errors identified](exempel2.png)
 
