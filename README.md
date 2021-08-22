@@ -47,7 +47,13 @@ Diverse detaljer att ha i åtanke:
 * Tecknet `ſ` (långt s) visas som identiskt med `s` i detta projekts version av DPCustomMono2, för att underlätta korrekturläsningen.
 * Ibland är det uppenbara feltryck i ordboken, med enskilda tecken som blivit fel, t.ex. upp-och-nedvända bokstäver, bokstäver från fel teckensnitt, eller tecken som fallit bort. Rätta i så fall i OCR-texten; det är bättre att vår digitala text är korrekt, än att vi återskapar uppenbara fel i den gamla boken. Men, ändra _inte_ t.ex. stavningen, och skriv inte heller om texten. Ifall du hittar uppenbara felaktiga ord eller uppgifter, låt det stå som det är, men gör en anteckning någonstans, så kan vi ta itu med det när det är dags att publicera texten. 
 
-Dessa instruktioner kan med största sannolikhet komma att utökas och förtydligas framöver.
+Från och med augusti 2021 har alla sidor genomgått en grundläggande korrigering. Det som främst återstår att rätta nu är:
+
+* Sammanblandningar av `n` och `u`.
+* Sammanblandningar av `f` och `ſ`.
+* Sammanblandningar av `I` och `l` och `1`.
+* Sammanblandningar av `.` och `,` och `:` och `;`.
+* Saknade eller överflödiga mellanrum.
 
 ## Reserverade filer
 
@@ -56,30 +62,30 @@ Detta är nuvarande status för de olika textfilerna. Frånvaron av namn eller k
 - [x] cavallinlatin-1-00.terese Alatius
 - [x] cavallinlatin-1-01.terese Alatius
 - [x] cavallinlatin-1-02.terese Alatius
-- [ ] cavallinlatin-1-03.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-04.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-05.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-06.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-07.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-08.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-09.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-10.terese Alatius, grovrättad
-- [ ] cavallinlatin-1-11.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-00.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-01.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-02.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-03.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-04.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-05.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-06.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-07.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-08.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-09.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-10.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-11.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-12.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-13.terese Alatius, grovrättad
-- [ ] cavallinlatin-2-14.terese Alatius, grovrättad
+- [ ] cavallinlatin-1-03.terese 
+- [ ] cavallinlatin-1-04.terese 
+- [ ] cavallinlatin-1-05.terese 
+- [ ] cavallinlatin-1-06.terese 
+- [ ] cavallinlatin-1-07.terese 
+- [ ] cavallinlatin-1-08.terese 
+- [ ] cavallinlatin-1-09.terese 
+- [ ] cavallinlatin-1-10.terese 
+- [ ] cavallinlatin-1-11.terese 
+- [ ] cavallinlatin-2-00.terese 
+- [ ] cavallinlatin-2-01.terese 
+- [ ] cavallinlatin-2-02.terese 
+- [ ] cavallinlatin-2-03.terese 
+- [ ] cavallinlatin-2-04.terese 
+- [ ] cavallinlatin-2-05.terese 
+- [ ] cavallinlatin-2-06.terese 
+- [ ] cavallinlatin-2-07.terese 
+- [ ] cavallinlatin-2-08.terese 
+- [ ] cavallinlatin-2-09.terese 
+- [ ] cavallinlatin-2-10.terese 
+- [ ] cavallinlatin-2-11.terese 
+- [ ] cavallinlatin-2-12.terese 
+- [ ] cavallinlatin-2-13.terese 
+- [ ] cavallinlatin-2-14.terese 
 
 ![Two errors identified](exempel2.png)
 
