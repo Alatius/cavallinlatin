@@ -199,4 +199,6 @@ def convert_fodt_files():
     html = html.replace("</u><u>", "")
     html = html.replace("   <p>", "\n<p>")
 
+    html = html.replace("<br/>\n<b><br/>\n", "</p>\n\n<p><b>")
+
     return html

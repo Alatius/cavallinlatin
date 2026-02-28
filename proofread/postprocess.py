@@ -16,32 +16,26 @@ def clean(text):
     return text
 
 
-def is_numeral(text):
+def is_sense_number(text):
     text = text.replace("<br/>", "")
-    if re.match("^[IVX]+", text):
+    if re.match("^[IVX]+", text) or re.match(r"^[A-Z]\.", text):
         return True
     return False
 
 
-def postprocess_and_write(html):
+def postprocess(html):
+    # Clean up some mistakes
+    html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
+    html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
+    html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
+    html = re.sub(r" *<br/> *\n([a-z]\.) *<br/> *\n<u>", r"<br/>\n\1 <u>", html)
     html = html.replace("<p><br/>\n", "<p>")
     html = re.sub(r" *<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: (" " + x.group(1)) if x.group(1)[-1] == ';' else x.group(0), html)
 
-    html = re.sub(r"^(<p>[IV]+\.\s+)(\S+)", lambda x: "#" + clean(x.group(2)) + "# ???" + x.group(0), html, flags=re.MULTILINE)
+    # Locate headwords
+    html = re.sub(r"^(<p>[IV]+\.\s+)(\S+)", lambda x: "#" + clean(x.group(2)) + "# " + x.group(0), html, flags=re.MULTILINE)
     html = re.sub(r"^(<[pbu]>\S+)", lambda x: "#" + clean(x.group(1)) + "# " + x.group(0), html, flags=re.MULTILINE)
-    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: ("<br/>\n#" + clean(x.group(1)) + "# " + x.group(1)) if not is_numeral(x.group(1)) else x.group(0), html)
+    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: ("<br/>\n#" + clean(x.group(1)) + "# " + x.group(1)) if not is_sense_number(x.group(1)) else x.group(0), html)
     html = re.sub(r"^(#[^#]*# )(<p>)", "\\2\\1", html, flags=re.MULTILINE)
 
-    with open('cavallinlatin.html', 'w') as lexicon_file:
-        lexicon_file.write("""<!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Latinskt-svenskt lexicon</title>
-        <style>
-    span { background-color: #ceebfd; }
-        </style>
-      </head>
-      <body>""")
-        lexicon_file.write(html)
-        lexicon_file.write("\n</body>\n</html>\n")
+    return html
