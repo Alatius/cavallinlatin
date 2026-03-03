@@ -30,12 +30,78 @@ def postprocess(html):
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub(r" *<br/> *\n([a-z]\.) *<br/> *\n<u>", r"<br/>\n\1 <u>", html)
     html = html.replace("<p><br/>\n", "<p>")
+    html = re.sub(' *<br/> *\n *<br/> *\n *', '</br>\n', html)
     html = re.sub(r" *<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: (" " + x.group(1)) if x.group(1)[-1] == ';' else x.group(0), html)
+    html = re.sub(' *</b> *</span> *<br/> *\n *<span> *<b> *', ' ', html)
+    html = html.replace(". . .", "…")
+    html = re.sub(' *</span> *<br/> *\n<span> *', ' ', html)
 
     # Locate headwords
-    html = re.sub(r"^(<p>[IV]+\.\s+)(\S+)", lambda x: "#" + clean(x.group(2)) + "# " + x.group(0), html, flags=re.MULTILINE)
-    html = re.sub(r"^(<[pbu]>\S+)", lambda x: "#" + clean(x.group(1)) + "# " + x.group(0), html, flags=re.MULTILINE)
-    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: ("<br/>\n#" + clean(x.group(1)) + "# " + x.group(1)) if not is_sense_number(x.group(1)) else x.group(0), html)
-    html = re.sub(r"^(#[^#]*# )(<p>)", "\\2\\1", html, flags=re.MULTILINE)
+    HW = r'(<[bu]>[^<]*</[bu]>\S*|\S+)'
+    html = re.sub(r"^(<p>(?:[IV]+\.\s+)?)" + HW,
+                  lambda x: x.group(1) + "<orth>" + x.group(2) + "</orth>",
+                  html, flags=re.MULTILINE)
+    html = re.sub(r"^(<[bu]>[^<]*</[bu]>\S*)",
+                  lambda x: "<orth>" + x.group(1) + "</orth>",
+                  html, flags=re.MULTILINE)
+    html = re.sub(r"^(\(<[bu]>[^<]*</[bu]>\)?\S*)",
+                  lambda x: "<orth>" + x.group(1) + "</orth>",
+                  html, flags=re.MULTILINE)
+    html = re.sub(r"^(\([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)",
+                  lambda x: "<orth>" + x.group(1) + "</orth>",
+                  html, flags=re.MULTILINE)
+    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)",
+                  lambda x: "<br/>\n<orth>" + x.group(1) + "</orth>" if not is_sense_number(x.group(1)) else x.group(0),
+                  html)
+
+    # More clean up
+    html = html.replace('<br/></orth>', '</orth><br/>')
+    html = html.replace("<orth></orth><br/>\n<orth>", "<orth>")
+    html = re.sub('</orth> *…', '…</orth>', html)
+
+    # Join <br/> before <orth> when not end of entry
+    CONNECTIVES = {'och', 'eller', 'äfwen', 'deraf', 'häraf', 'i', 'wanligare',
+                   'wanligen', 'et', 'hwar', 'åt', 'samt', 'för', 'som', 'se',
+                   'Och', 'sällan', 'oftare', 'förstärkt', 'detta', 'a'}
+    JOIN_ABBREVS = {'l.', 'o.', 'wanl.', 'absol.', 'spec.', 'arch.', 'obr.'}
+    GRAMMAR = {'pl.', 'm.', 'Subst.', 'plur.', 'Dep.', 'subst.', 'f.', 'part.',
+               'Abl.', 'Acc.', 'abl.', 'n.', 'pt.', 'pr.', 'p.', 'comp.', 'dep.',
+               'pf.', 'Superl.'}
+
+    def join_or_keep(m):
+        # Preceding headword followed by another → JOIN
+        if '</orth>' in m.group(1):
+            return m.group(1) + ' ' + m.group(2)
+        word = re.sub(r'<[^>]*>', '', m.group(1))
+        if not word:
+            return m.group(0)
+        last_char = word[-1]
+        # Ends with : , ; → JOIN
+        if last_char in (':', ',', ';'):
+            return m.group(1) + ' ' + m.group(2)
+        # Word is - = ( → JOIN
+        if word in ('-', '=', '('):
+            return m.group(1) + ' ' + m.group(2)
+        # Ends with ) but not ). → JOIN
+        if word.endswith(')') and not word.endswith(').'):
+            return m.group(1) + ' ' + m.group(2)
+        # Connective words (possibly with leading parenthesis)
+        bare = word.lstrip('(')
+        if word in CONNECTIVES or bare in CONNECTIVES:
+            return m.group(1) + ' ' + m.group(2)
+        # Join abbreviations
+        if word in JOIN_ABBREVS or bare in JOIN_ABBREVS:
+            return m.group(1) + ' ' + m.group(2)
+        # Grammar terms
+        if word in GRAMMAR:
+            return m.group(1) + ' ' + m.group(2)
+        # Numbers at line start
+        if re.match(r'^\d+\.$', word):
+            before = html[max(0, m.start() - 10):m.start()]
+            if re.search(r'\n\s*$', before):
+                return m.group(1) + ' ' + m.group(2)
+        return m.group(0)
+
+    html = re.sub(r'([^\s<>]+(?:</[^>]*>)*) *<br/>\n(<orth>)', join_or_keep, html)
 
     return html

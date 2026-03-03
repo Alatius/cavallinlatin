@@ -74,7 +74,7 @@ def convert_fodt_files():
     html = html.replace("t2-0>", "u>")
     html = html.replace("t3-0>", "b>")
     html = html.replace("t4-0>", "i>")
-    #html = html.replace("t6-0>", "span>")
+    html = html.replace("<t6-0>", "").replace("</t6-0>", "")
 
     html = html.replace("t1-1>", "b>")
     html = html.replace("t2-1>", "b>")
@@ -88,28 +88,28 @@ def convert_fodt_files():
     html = html.replace("t2-2>", "i>")
     html = html.replace("t3-2>", "b>")
     html = html.replace("<t4-2>", "").replace("</t4-2>", "")
-    #html = html.replace("t5-2>", "span>")
+    html = html.replace("<t5-2>", "").replace("</t5-2>", "")
 
 
-    #html = html.replace("<t4-3>", "").replace("</t4-3>", "")
+    html = html.replace("<t4-3>", "").replace("</t4-3>", "")
     html = html.replace("t1-3>", "u>")
-    html = html.replace("t2-3>", "u>")
-    html = html.replace("t3-3>", "i>")
-    html = html.replace("t4-3>", "b>")
+    html = html.replace("t2-3>", "i>")
+    html = html.replace("t3-3>", "b>")
+    #html = html.replace("t4-3>", "b>")
 
     html = html.replace("t1-4>", "b>")
-    html = html.replace("t2-4>", "u>")
+    html = html.replace("t2-4>", "b>")
     html = html.replace("t3-4>", "i>")
     html = html.replace("t4-4>", "u>")
     html = html.replace("t5-4>", "b>")
-    #html = html.replace("t6-4>", "span>")
-    html = html.replace("t7-4>", "u>")
+    html = html.replace("<t6-4>", "").replace("</t6-4>", "")
+    html = html.replace("<t7-4>", "").replace("</t7-4>", "")
     html = html.replace("<t8-4>", "").replace("</t8-4>", "")
 
     html = html.replace("t1-5>", "u>")
     html = html.replace("t2-5>", "b>")
     html = html.replace("t3-5>", "i>")
-    #html = html.replace("t4-5>", "span>")
+    html = html.replace("<t4-5>", "").replace("</t4-5>", "")
 
     html = html.replace("t1-6>", "b>")
     html = html.replace("t2-6>", "u>")
@@ -123,7 +123,7 @@ def convert_fodt_files():
     html = html.replace("t4-7>", "b>")
     html = html.replace("t5-7>", "b>")
     html = html.replace("<t6-7>", "").replace("</t6-7>", "")
-    #html = html.replace("t7-7>", "span>")
+    html = html.replace("<t7-7>", "").replace("</t7-7>", "")
 
     html = html.replace("t1-8>", "b>")
     html = html.replace("t2-8>", "i>")
@@ -148,16 +148,18 @@ def convert_fodt_files():
     html = html.replace("t1-12>", "b>")
     html = html.replace("t2-12>", "i>")
     html = html.replace("t3-12>", "i>")
-    html = html.replace("t4-12>", "b>")
+    html = html.replace("t4-12>", "u>")
     html = html.replace("t5-12>", "b>")
     html = html.replace("<t6-12>", "").replace("</t6-12>", "")
 
     html = html.replace("t1-13>", "b>")
     html = html.replace("t2-13>", "u>")
+    html = html.replace("t3-13>", "u>")
     html = html.replace("t4-13>", "b>")
     html = html.replace("t5-13>", "i>")
     html = html.replace("t6-13>", "i>")
     html = html.replace("t7-13>", "i>")
+    html = html.replace("<t8-13>", "").replace("</t8-13>", "")
     html = html.replace("<t9-13>", "").replace("</t9-13>", "")
 
     html = html.replace("t1-14>", "i>")
@@ -174,6 +176,7 @@ def convert_fodt_files():
     html = html.replace("t1-16>", "b>")
     html = html.replace("t2-16>", "u>")
     html = html.replace("t3-16>", "i>")
+    html = html.replace("<t4-16>", "").replace("</t4-16>", "")
 
     html = html.replace("t1-17>", "u>")
     html = html.replace("t2-17>", "i>")
@@ -192,6 +195,44 @@ def convert_fodt_files():
     html = html.replace("t4-19>", "u>")
     html = html.replace("t5-19>", "i>")
     html = html.replace("<t6-19>", "").replace("</t6-19>", "")
+
+    html = html.replace("t1-20>", "u>")
+    html = html.replace("t2-20>", "i>")
+    html = html.replace("t3-20>", "b>")
+
+    html = html.replace("t1-21>", "u>")
+    html = html.replace("t2-21>", "b>")
+    html = html.replace("t3-21>", "u>")
+    html = html.replace("t4-21>", "i>")
+    html = html.replace("t5-21>", "b>")
+
+    html = html.replace("t1-22>", "b>")
+    html = html.replace("t2-22>", "i>")
+    html = html.replace("t3-22>", "u>")
+    html = html.replace("<t4-22>", "").replace("</t4-22>", "")
+
+    html = html.replace("t1-23>", "b>")
+    html = html.replace("t2-23>", "b>")
+    html = html.replace("t3-23>", "i>")
+    html = html.replace("<t4-23>", "").replace("</t4-23>", "")
+    html = html.replace("t5-23>", "u>")
+    html = html.replace("t6-23>", "u>")
+
+    html = html.replace("t1-24>", "b>")
+    html = html.replace("t2-24>", "u>")
+    html = html.replace("t3-24>", "i>")
+    html = html.replace("<t4-24>", "").replace("</t4-24>", "")
+    html = html.replace("<t5-24>", "").replace("</t5-24>", "")
+
+    html = html.replace("t1-25>", "b>")
+    html = html.replace("t2-25>", "i>")
+    html = html.replace("t3-25>", "u>")
+    html = html.replace("<t4-25>", "").replace("</t4-25>", "")
+
+    html = html.replace("t1-26>", "b>")
+    html = html.replace("t2-26>", "u>")
+    html = html.replace("t3-26>", "i>")
+
 
     html = html.replace("</span><span>", "")
     html = html.replace("</b><b>", "")
