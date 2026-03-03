@@ -1,6 +1,8 @@
 import re
 import unicodedata
 
+from spurious_breaks import remove_spurious_breaks
+
 
 def remove_accents(input_str):
     nfkd_form = unicodedata.normalize('NFKD', input_str)
@@ -30,10 +32,11 @@ def postprocess(html):
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub(r" *<br/> *\n([a-z]\.) *<br/> *\n<u>", r"<br/>\n\1 <u>", html)
     html = html.replace("<p><br/>\n", "<p>")
-    html = re.sub(' *<br/> *\n *<br/> *\n *', '</br>\n', html)
+    html = re.sub(' *<br/> *\n *<br/> *\n *', '<br/>\n', html)
     html = re.sub(r" *<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: (" " + x.group(1)) if x.group(1)[-1] == ';' else x.group(0), html)
     html = re.sub(' *</b> *</span> *<br/> *\n *<span> *<b> *', ' ', html)
     html = html.replace(". . .", "…")
+    html = re.sub(r'(\d)—(\d)', r'\1–\2', html)
     html = re.sub(' *</span> *<br/> *\n<span> *', ' ', html)
 
     # Locate headwords
@@ -58,6 +61,7 @@ def postprocess(html):
     html = html.replace('<br/></orth>', '</orth><br/>')
     html = html.replace("<orth></orth><br/>\n<orth>", "<orth>")
     html = re.sub('</orth> *…', '…</orth>', html)
+    html = html.replace(r'-<br/>\n', '-')
 
     # Join <br/> before <orth> when not end of entry
     CONNECTIVES = {'och', 'eller', 'äfwen', 'deraf', 'häraf', 'i', 'wanligare',
@@ -65,7 +69,7 @@ def postprocess(html):
                    'Och', 'sällan', 'oftare', 'förstärkt', 'detta', 'a'}
     JOIN_ABBREVS = {'l.', 'o.', 'wanl.', 'absol.', 'spec.', 'arch.', 'obr.'}
     GRAMMAR = {'pl.', 'm.', 'Subst.', 'plur.', 'Dep.', 'subst.', 'f.', 'part.',
-               'Abl.', 'Acc.', 'abl.', 'n.', 'pt.', 'pr.', 'p.', 'comp.', 'dep.',
+               'Abl.', 'Acc.', 'abl.', 'n.', 'pt.', 'pr.', 'p.', 'comp.', 'Comp.', 'dep.',
                'pf.', 'Superl.'}
 
     def join_or_keep(m):
@@ -103,5 +107,7 @@ def postprocess(html):
         return m.group(0)
 
     html = re.sub(r'([^\s<>]+(?:</[^>]*>)*) *<br/>\n(<orth>)', join_or_keep, html)
+
+    html = remove_spurious_breaks(html)
 
     return html
