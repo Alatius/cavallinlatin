@@ -71,51 +71,39 @@ def split_paragraphs_at_orths(html):
     """
 
     def is_sequence_valid(markers_to_check):
-        """Check if a sequence of markers is valid."""
+        """Check if a sequence of markers is valid using stack-based nesting."""
         if len(markers_to_check) < 1:
             return True
 
-        seen_types = {}
+        # Stack of (level, last_value) mirroring convert_senses_to_lists
+        stack = []
+
         for marker, mtype, mval, punct in markers_to_check:
-            if mtype not in seen_types:
-                seen_types[mtype] = mval
+            if mtype == 'unknown':
+                continue
+            level = _marker_level(mtype)
+            if level is None:
+                continue
+
+            # Pop deeper levels (returning to a shallower nesting)
+            while stack and stack[-1][0] > level:
+                stack.pop()
+
+            if stack and stack[-1][0] == level:
+                # Sibling: must be exactly prev + 1
+                prev_val = stack[-1][1]
+                if mval != prev_val + 1:
+                    return False
+                stack[-1] = (level, mval)
+            else:
+                # New nested level (or first marker): check initial value
                 if mtype in ('letter', 'letter_upper', 'double_letter', 'greek'):
                     if mval != 0:
                         return False
-                elif mtype in ('roman_lower', 'roman_upper'):
+                elif mtype in ('digit', 'roman_lower', 'roman_upper'):
                     if mval != 1:
                         return False
-                elif mtype == 'digit':
-                    if mval != 1:
-                        return False
-
-        for i in range(1, len(markers_to_check)):
-            prev_marker, prev_type, prev_val, prev_punct = markers_to_check[i-1]
-            curr_marker, curr_type, curr_val, curr_punct = markers_to_check[i]
-
-            if prev_type == curr_type:
-                if curr_val <= prev_val or curr_val > prev_val + 1:
-                    if prev_type not in ('unknown',):
-                        return False
-            elif prev_type == 'digit' and curr_type in ('letter', 'double_letter', 'greek', 'roman_lower'):
-                pass
-            elif prev_type in ('letter', 'double_letter', 'greek', 'roman_lower') and curr_type == 'digit':
-                pass
-            elif prev_type in ('letter', 'double_letter', 'greek', 'roman_lower') and curr_type in ('letter', 'double_letter', 'greek', 'roman_lower'):
-                pass
-            elif prev_type in ('roman_lower', 'roman_upper', 'letter_upper') and curr_type in ('letter', 'double_letter', 'greek', 'digit'):
-                pass
-            elif prev_type in ('letter', 'double_letter', 'greek') and curr_type in ('roman_lower', 'roman_upper', 'letter_upper'):
-                pass
-            elif prev_type == 'digit' and curr_type in ('roman_lower', 'roman_upper', 'letter_upper'):
-                pass
-            elif prev_type in ('roman_lower', 'roman_upper', 'letter_upper') and curr_type == 'digit':
-                pass
-            elif prev_type in ('roman_upper', 'letter_upper') and curr_type in ('roman_upper', 'letter_upper'):
-                pass
-            else:
-                if not (prev_type == 'unknown' or curr_type == 'unknown'):
-                    return False
+                stack.append((level, mval))
 
         return True
 
@@ -187,14 +175,28 @@ def split_paragraphs_at_orths(html):
                     return True
             return False
 
+        # Inline orths (not line-initial) that can serve as reset/split points
+        candidate_orth_set = set(candidate_orth_positions)
+        inline_orth_positions = [p for p in all_orth_positions
+                                 if p not in candidate_orth_set]
+
         if not candidate_orths:
             # No line-initial orths to split at; still check sequence validity
             if len(markers) >= 2 and not is_sequence_valid(markers):
-                if not any_valid_partition(all_orth_positions):
-                    return '<p>!!!' + para_content
+                # Try inline orths as split points
+                for orth_pos in inline_orth_positions:
+                    if try_partition_combination(markers, [orth_pos], marker_positions):
+                        # Find the <br/>\n before this orth to split there
+                        br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
+                        if br_pos >= 0:
+                            br_end = br_pos + len('<br/>\n')
+                            result = para_content[:br_pos] + '</p>\n\n<p>' + para_content[br_end:]
+                            return '<p>' + result
+                return '<p>!!!' + para_content
             return full_para
 
         # If no markers or only 1 marker, all candidate orths become paragraph breaks
+        inline_break_positions = set()
         if len(markers) < 2:
             break_positions = set(candidate_orth_positions)
         else:
@@ -211,10 +213,6 @@ def split_paragraphs_at_orths(html):
                 else:
                     between_markers.append(i)
                     between_markers_positions.append(pos)
-
-            # Inline orths (not line-initial) that can serve as optional reset points
-            inline_orth_positions = [p for p in all_orth_positions
-                                     if p not in set(candidate_orth_positions)]
 
             # Try all 2^n combinations of the between-markers line-initial orths,
             # and for each, also try all 2^m combinations of inline orths
@@ -237,7 +235,7 @@ def split_paragraphs_at_orths(html):
                     active_inline_resets = []
                 all_resets = active_line_resets + list(always_break) + active_inline_resets
                 if try_partition_combination(markers, all_resets, marker_positions):
-                    valid_permutations.append(set(active_line_resets))
+                    valid_permutations.append((set(active_line_resets), set(active_inline_resets)))
 
             # No valid permutations — mark for manual review, don't modify
             if not valid_permutations:
@@ -246,22 +244,38 @@ def split_paragraphs_at_orths(html):
             # Classify each candidate line-initial orth
             break_positions = set(always_break)
             for i, pos in enumerate(between_markers_positions):
-                # If this orth is a reset in at least one valid permutation, it's a break
-                is_break_in_any = any(pos in vp for vp in valid_permutations)
+                is_break_in_any = any(pos in vp[0] for vp in valid_permutations)
                 if is_break_in_any:
                     break_positions.add(pos)
 
-        # Apply changes: process candidate orths from end to start to preserve positions
-        result = para_content
-        for i in range(len(candidate_orths) - 1, -1, -1):
+            # Collect inline orths that appear in any valid permutation
+            inline_break_positions = set()
+            for _, inline_set in valid_permutations:
+                inline_break_positions |= inline_set
+
+        # Collect all split operations: (start_pos, end_pos, replacement)
+        # Process from end to start to preserve positions
+        operations = []
+
+        # Line-initial orth operations
+        for i in range(len(candidate_orths)):
             m = candidate_orths[i]
             pos = candidate_orth_positions[i]
             if pos in break_positions:
-                # Replace <br/>\n<orth> with </p>\n\n<p><orth>
-                result = result[:m.start()] + '</p>\n\n<p><orth>' + result[m.end():]
+                operations.append((m.start(), m.end(), '</p>\n\n<p><orth>'))
             else:
-                # Remove \n from <br/>\n<orth>
-                result = result[:m.start()] + ' </br><orth>' + result[m.end():]
+                operations.append((m.start(), m.end(), ' </br><orth>'))
+
+        # Inline orth split operations (split at preceding <br/>\n)
+        for orth_pos in inline_break_positions:
+            br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
+            if br_pos >= 0:
+                operations.append((br_pos, br_pos + len('<br/>\n'), '</p>\n\n<p>'))
+
+        # Apply from end to start
+        result = para_content
+        for start, end, replacement in sorted(operations, key=lambda x: x[0], reverse=True):
+            result = result[:start] + replacement + result[end:]
 
         return '<p>' + result
 
