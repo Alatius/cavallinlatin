@@ -40,6 +40,9 @@ def postprocess(html):
     html = re.sub(r'(\d)—(\d)', r'\1–\2', html)
     html = re.sub(' *</span> *<br/> *\n<span> *', ' ', html)
     html = html.replace('Varro 1. l. ', 'Varro l. l. ').replace('Varr. 1. l. ', 'Varr. l. l. ')
+    html = html.replace('C<i>', '<i>C')
+    html = html.replace('<i>:</i>', ':')
+    html = html.replace('<i>;</i>', ';')
 
     # Locate headwords
     HW = r'(<[bu]>[^<]*</[bu]>\S*|\S+)'
@@ -85,8 +88,8 @@ def postprocess(html):
         # Ends with : , ; → JOIN
         if last_char in (':', ',', ';'):
             return m.group(1) + ' ' + m.group(2)
-        # Word is - = ( → JOIN
-        if word in ('-', '=', '('):
+        # Word is = ( → JOIN
+        if word in ('=', '('):
             return m.group(1) + ' ' + m.group(2)
         # Ends with ) but not ). → JOIN
         if word.endswith(')') and not word.endswith(').'):

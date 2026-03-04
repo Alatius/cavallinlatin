@@ -11,6 +11,7 @@ with open('cavallinlatin.html', 'w') as lexicon_file:
     <meta charset="utf-8">
     <title>Latinskt-svenskt lexicon</title>
     <style>
+orth { background-color: orange; }
 span { background-color: #ceebfd; }
 ol.sense-Roman { list-style-type: upper-roman; }
 ol.sense-Alpha { list-style-type: upper-alpha; }
