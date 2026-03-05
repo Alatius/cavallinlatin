@@ -1,5 +1,6 @@
 import glob
 from lxml import etree
+import re
 
 
 html_tags = {
@@ -66,6 +67,7 @@ def convert_fodt_files():
 
         for office_text in office_text_elements:
             html.append(extract_html(office_text, num))
+            html.append('<fodtbreak/>')
 
     html = ''.join(html)
 
@@ -242,4 +244,14 @@ def convert_fodt_files():
 
     html = html.replace("<br/>\n<b><br/>\n", "</p>\n\n<p><b>")
 
+    html = re.sub(r'-</span></p>\s*<fodtbreak/>\s*<p><span>', '', html)
+    html = re.sub(r'</b></span></p>\s*<fodtbreak/>\s*<p><span><b>', ' ', html)
+    html = re.sub(r'</span></p>\s*<fodtbreak/>\s*<p><span>', ' ', html)
+    html = re.sub(r'</p>\s*<fodtbreak/>\s*<p><br/>\n', r'</p>\n\n<p>', html)
+    html = re.sub(r'</p>\s*<fodtbreak/>\s*(<p>(I\. )?<b>)', r'</p>\n\n\1', html)
+    html = re.sub(r' —</p>\s*<fodtbreak/>\s*<p>', '<br/>\n', html)
+    html = re.sub(r'-</p>\s*<fodtbreak/>\s*<p>', '', html)
+    html = re.sub(r'</p>\s*<fodtbreak/>\s*<p>', ' ', html)
+    html = html.replace('<fodtbreak/>', '')
+    
     return html

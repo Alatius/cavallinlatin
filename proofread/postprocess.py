@@ -43,6 +43,7 @@ def postprocess(html):
     html = html.replace('C<i>', '<i>C')
     html = html.replace('<i>:</i>', ':')
     html = html.replace('<i>;</i>', ';')
+    html = re.sub(',([a-z])', r', \1', html)
 
     # Locate headwords
     HW = r'(<[bu]>[^<]*</[bu]>\S*|\S+)'
