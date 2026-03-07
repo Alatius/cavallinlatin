@@ -37,4 +37,5 @@ terese/src/terese
 terese/src/terese.o
 terese/src/unigram.o
 terese/stamp-h1
-
+proofread/columns/*.png
+proofread/.alignment_cache.pkl

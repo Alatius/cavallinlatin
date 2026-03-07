@@ -4,24 +4,38 @@ from postprocess import postprocess
 html = convert_fodt_files()
 html = postprocess(html)
 
+html = html.replace('!!!', '')
+
 with open('cavallinlatin.html', 'w') as lexicon_file:
     lexicon_file.write("""<!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
     <title>Latinskt-svenskt lexicon</title>
-    <style>
-orth { background-color: orange; }
-span { background-color: #ceebfd; }
-ol.sense-Roman { list-style-type: upper-roman; }
-ol.sense-Alpha { list-style-type: upper-alpha; }
-ol.sense-decimal { list-style-type: decimal; }
-ol.sense-alpha { list-style-type: lower-alpha; }
-ol.sense-greek { list-style-type: lower-greek; }
-ol.sense-roman { list-style-type: lower-roman; }
-ol.sense-double-alpha { list-style-type: lower-alpha; }
-    </style>
+    <link rel="stylesheet" href="cavallinlatin.css">
+    <script>
+      (function() {
+        var w = localStorage.getItem('image-panel-width');
+        if (w) document.write('<style>#image-panel{width:' + parseInt(w) + 'px}</style>');
+      })();
+    </script>
   </head>
-  <body>""")
+  <body>
+<div id="content">
+""")
     lexicon_file.write(html)
-    lexicon_file.write("\n</body>\n</html>\n")
+    lexicon_file.write("""
+</div>
+<div id="resize-handle"></div>
+<div id="image-panel">
+  <div id="image-panel-header">
+    <span id="image-panel-label"></span>
+  </div>
+  <div id="image-panel-img-container">
+    <img id="image-panel-img">
+  </div>
+</div>
+<script src="cavallinlatin.js"></script>
+</body>
+</html>
+""")

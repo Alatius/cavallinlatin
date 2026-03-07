@@ -1,8 +1,10 @@
 import re
 import unicodedata
 
+from text_alignment import compute_full_alignment
 from spurious_breaks import remove_spurious_breaks
 from sense_processing import split_paragraphs_at_orths, convert_senses_to_lists
+from orth_sources import compute_orth_sources, apply_orth_attrs
 
 
 def remove_accents(input_str):
@@ -114,7 +116,10 @@ def postprocess(html):
 
     html = re.sub(r'([^\s<>]+(?:</[^>]*>)*) *<br/>\n(<orth>)', join_or_keep, html)
 
-    html = remove_spurious_breaks(html)
+    alignment = compute_full_alignment(html)
+    orth_attrs = compute_orth_sources(html, alignment)
+    html = remove_spurious_breaks(html, alignment)
+    html = apply_orth_attrs(html, orth_attrs)
 
     html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 

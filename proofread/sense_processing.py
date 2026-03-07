@@ -156,12 +156,14 @@ def split_paragraphs_at_orths(html):
         # Find candidate orth split points: line-initial <orth> tags (preceded by <br/>\n)
         candidate_orths = []
         candidate_orth_positions = []
-        for m in re.finditer(r'<br/>\n<orth>', para_content):
+        candidate_orth_tags = []
+        for m in re.finditer(r'<br/>\n(<orth[^>]*>)', para_content):
             candidate_orths.append(m)
             candidate_orth_positions.append(m.start())
+            candidate_orth_tags.append(m.group(1))
 
         # All <orth> positions (including inline) for sequence validity checking
-        all_orth_positions = [m.start() for m in re.finditer(r'<orth>', para_content)]
+        all_orth_positions = [m.start() for m in re.finditer(r'<orth[^>]*>', para_content)]
 
         # Helper: check if any combination of the given orth positions makes the
         # marker sequence valid (used for !!! detection)
@@ -261,10 +263,11 @@ def split_paragraphs_at_orths(html):
         for i in range(len(candidate_orths)):
             m = candidate_orths[i]
             pos = candidate_orth_positions[i]
+            orth_tag = candidate_orth_tags[i]
             if pos in break_positions:
-                operations.append((m.start(), m.end(), '</p>\n\n<p><orth>'))
+                operations.append((m.start(), m.end(), f'</p>\n\n<p>{orth_tag}'))
             else:
-                operations.append((m.start(), m.end(), ' </br><orth>'))
+                operations.append((m.start(), m.end(), f' </br>{orth_tag}'))
 
         # Inline orth split operations (split at preceding <br/>\n)
         for orth_pos in inline_break_positions:
