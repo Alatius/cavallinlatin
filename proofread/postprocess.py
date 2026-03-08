@@ -95,8 +95,8 @@ def postprocess(html):
         # Word is = ( → JOIN
         if word in ('=', '('):
             return m.group(1) + ' ' + m.group(2)
-        # Ends with ) but not ). → JOIN
-        if word.endswith(')') and not word.endswith(').'):
+        # Ends with ) but not ). or ?) → JOIN
+        if word.endswith(')') and not word.endswith(').') and not word.endswith('?)'):
             return m.group(1) + ' ' + m.group(2)
         # Connective words (possibly with leading parenthesis)
         bare = word.lstrip('(')
