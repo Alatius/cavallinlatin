@@ -179,8 +179,15 @@ def split_paragraphs_at_orths(html):
 
         # Inline orths (not line-initial) that can serve as reset/split points
         candidate_orth_set = set(candidate_orth_positions)
+        # Exclude inline orths on lines that start with a sense number,
+        # since splitting there would break the sense numbering.
+        sense_line_re = re.compile(r'<br/>\n\s*(?:[0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])[.,;]?\s')
+        def is_on_sense_line(orth_pos):
+            br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
+            return br_pos >= 0 and sense_line_re.match(para_content, br_pos)
         inline_orth_positions = [p for p in all_orth_positions
-                                 if p not in candidate_orth_set]
+                                 if p not in candidate_orth_set
+                                 and not is_on_sense_line(p)]
 
         if not candidate_orths:
             # No line-initial orths to split at; still check sequence validity
