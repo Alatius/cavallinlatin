@@ -46,6 +46,7 @@ def postprocess(html):
     html = html.replace('<i>:</i>', ':')
     html = html.replace('<i>;</i>', ';')
     html = re.sub(',([a-z])', r', \1', html)
+    html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 
     # Locate headwords
     HW = r'(<[bu]>[^<]*</[bu]>\S*|\S+)'
@@ -75,7 +76,7 @@ def postprocess(html):
     CONNECTIVES = {'och', 'eller', 'äfwen', 'deraf', 'häraf', 'i', 'wanligare',
                    'wanligen', 'et', 'hwar', 'åt', 'samt', 'för', 'som', 'se',
                    'Och', 'sällan', 'oftare', 'förstärkt', 'detta', 'a'}
-    JOIN_ABBREVS = {'l.', 'o.', 'wanl.', 'absol.', 'spec.', 'arch.', 'obr.'}
+    JOIN_ABBREVS = {'l.', 'o.', 'wanl.', 'absol.', 'spec.', 'arch.', 'obr.', 'urspr.'}
     GRAMMAR = {'pl.', 'm.', 'Subst.', 'plur.', 'Dep.', 'subst.', 'f.', 'part.',
                'Abl.', 'Acc.', 'abl.', 'n.', 'pt.', 'pr.', 'p.', 'comp.', 'Comp.', 'dep.',
                'pf.', 'Superl.'}
@@ -120,8 +121,6 @@ def postprocess(html):
     orth_attrs = compute_orth_sources(html, alignment)
     html = remove_spurious_breaks(html, alignment)
     html = apply_orth_attrs(html, orth_attrs)
-
-    html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 
     html = split_paragraphs_at_orths(html)
 

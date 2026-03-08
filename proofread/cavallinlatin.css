@@ -1,5 +1,5 @@
-orth { background-color: orange; cursor: pointer; }
-orth:hover { background-color: #ff8c00; }
+orth { background-color: rgb(222, 150, 248); cursor: pointer; }
+orth:hover { background-color: rgb(244, 212, 255); }
 span { background-color: #ceebfd; }
 ol.sense-Roman { list-style-type: upper-roman; }
 ol.sense-Alpha { list-style-type: upper-alpha; }

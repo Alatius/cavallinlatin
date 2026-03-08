@@ -49,7 +49,7 @@ def remove_spurious_breaks(html, alignment):
     """Remove <br/> tags that don't correspond to em-dashes in the rtml source."""
     dash_break_positions = _compute_dash_break_positions(html, alignment)
 
-    SENSE_RE = re.compile(r'^(?:[0-9]+\.|[IVX]+\.|[a-z]\.|[A-Z]\.|[αβγδεζηθ]\.)')
+    SENSE_RE = re.compile(r'^(?:[0-9]+\.|[IVX]+\.|([a-z])\1?\.|[A-Z]\.|[α-ω]\.)')
 
     def replace_break(m):
         after = html[m.end():m.end() + 30]
