@@ -79,7 +79,7 @@ def postprocess(html):
     JOIN_ABBREVS = {'l.', 'o.', 'wanl.', 'absol.', 'spec.', 'arch.', 'obr.', 'urspr.'}
     GRAMMAR = {'pl.', 'm.', 'Subst.', 'plur.', 'Dep.', 'subst.', 'f.', 'part.',
                'Abl.', 'Acc.', 'abl.', 'n.', 'pt.', 'pr.', 'p.', 'comp.', 'Comp.', 'dep.',
-               'pf.', 'Superl.'}
+               'pf.', 'Superl.', 'neutr.'}
 
     def join_or_keep(m):
         # Preceding headword followed by another → JOIN
