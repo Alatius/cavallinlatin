@@ -1,3 +1,4 @@
+from os import remove
 import re
 import unicodedata
 
@@ -5,6 +6,7 @@ from text_alignment import compute_full_alignment
 from spurious_breaks import remove_spurious_breaks
 from sense_processing import split_paragraphs_at_orths, convert_senses_to_lists
 from orth_sources import compute_orth_sources, apply_orth_attrs
+from prune_references import prune_reference_entries
 
 
 def remove_accents(input_str):
@@ -125,5 +127,7 @@ def postprocess(html):
     html = split_paragraphs_at_orths(html)
 
     html = convert_senses_to_lists(html)
+
+    html = prune_reference_entries(html)
 
     return html
