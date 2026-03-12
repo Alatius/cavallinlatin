@@ -10,13 +10,14 @@ _ALIGNMENT_CACHE = os.path.join(os.path.dirname(__file__), '.alignment_cache.pkl
 
 class AlignmentResult:
     __slots__ = ('html_to_rtml', 'rtml_dashes', 'html_plain_map',
-                 'source_map')
+                 'source_map', 'rtml_text')
 
     def __init__(self):
         self.html_to_rtml = []
         self.rtml_dashes = frozenset()
         self.html_plain_map = []
         self.source_map = []
+        self.rtml_text = ''
 
 
 def strip_tags_with_positions(text):
@@ -272,6 +273,7 @@ def compute_full_alignment(html):
 
     result = AlignmentResult()
     result.source_map = source_map
+    result.rtml_text = rtml_text
 
     # Compute rtml dash positions directly in box text
     rtml_dashes = frozenset(i for i, ch in enumerate(rtml_text) if ch == '—')
