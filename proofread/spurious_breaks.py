@@ -4,43 +4,38 @@ import re
 
 def _compute_dash_break_positions(html, alignment):
     """Compute absolute HTML positions of <br/> tags that correspond to
-    em-dashes in the rtml source, using pre-computed alignment."""
+    em-dashes in the rtml source, using pre-computed global alignment."""
     dash_break_positions = set()
 
-    for (h_to_r, r_dashes, h_norm, h_n2c, h_c2h, h_start, h_end, r_n2c) in alignment.para_alignments:
-        if not r_dashes:
+    html_plain_map = alignment.html_plain_map
+    html_to_rtml = alignment.html_to_rtml
+    rtml_dashes = alignment.rtml_dashes
+
+    for bm in re.finditer(r' *<br/>\n', html):
+        break_end_abs = bm.end()
+
+        # Find the html_plain position corresponding to just after the break
+        h_plain_pos = bisect.bisect_left(html_plain_map, break_end_abs)
+        if h_plain_pos >= len(html_to_rtml):
             continue
 
-        para_html = html[h_start:h_end]
-        for bm in re.finditer(r' *<br/>\n', para_html):
-            break_end_abs = h_start + bm.end()
+        # Look up corresponding rtml position
+        rtml_pos = html_to_rtml[h_plain_pos]
+        if rtml_pos == -1:
+            # Try nearby positions
+            for delta in range(1, 4):
+                if h_plain_pos + delta < len(html_to_rtml) and html_to_rtml[h_plain_pos + delta] >= 0:
+                    rtml_pos = html_to_rtml[h_plain_pos + delta]
+                    break
+                if h_plain_pos - delta >= 0 and html_to_rtml[h_plain_pos - delta] >= 0:
+                    rtml_pos = html_to_rtml[h_plain_pos - delta]
+                    break
+        if rtml_pos < 0:
+            continue
 
-            ci = bisect.bisect_left(h_c2h, break_end_abs)
-            if ci >= len(h_c2h):
-                continue
-
-            ni = bisect.bisect_left(h_n2c, ci)
-            if ni >= len(h_norm):
-                continue
-
-            ri_pos = h_to_r.get(ni)
-            if ri_pos is None:
-                for delta in range(1, 4):
-                    if (ni + delta) in h_to_r:
-                        ri_pos = h_to_r[ni + delta]
-                        break
-                    if (ni - delta) in h_to_r:
-                        ri_pos = h_to_r[ni - delta]
-                        break
-            if ri_pos is None:
-                continue
-
-            if ri_pos >= len(r_n2c):
-                continue
-            r_ci = r_n2c[ri_pos]
-
-            if any((r_ci + offset) in r_dashes for offset in range(-2, 3)):
-                dash_break_positions.add(h_start + bm.start())
+        # Check if nearby rtml position is a dash
+        if any((rtml_pos + offset) in rtml_dashes for offset in range(-2, 3)):
+            dash_break_positions.add(bm.start())
 
     return dash_break_positions
 

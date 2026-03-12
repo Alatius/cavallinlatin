@@ -1,24 +1,21 @@
-import bisect
 import glob
 import hashlib
 import os
 import pickle
 import re
-import unicodedata
 from difflib import SequenceMatcher
 
 _ALIGNMENT_CACHE = os.path.join(os.path.dirname(__file__), '.alignment_cache.pkl')
 
 
 class AlignmentResult:
-    __slots__ = ('para_alignments', 'matching_blocks', 'html_norm_to_html',
-                 'rtml_norm_map', 'source_map')
+    __slots__ = ('html_to_rtml', 'rtml_dashes', 'html_plain_map',
+                 'source_map')
 
     def __init__(self):
-        self.para_alignments = []
-        self.matching_blocks = []
-        self.html_norm_to_html = []
-        self.rtml_norm_map = []
+        self.html_to_rtml = []
+        self.rtml_dashes = frozenset()
+        self.html_plain_map = []
         self.source_map = []
 
 
@@ -44,32 +41,6 @@ def strip_tags_with_positions(text):
     return ''.join(result), mapping
 
 
-def clean_rtml(rtml):
-    """Clean rtml for alignment: strip tags, remove hyphens at line breaks,
-    collapse whitespace. Returns (clean_text, mapping_to_original)."""
-    text, mapping = strip_tags_with_positions(rtml)
-
-    result = []
-    result_map = []
-    i = 0
-    while i < len(text):
-        if text[i] == '-' and i + 1 < len(text) and text[i + 1] == '\n':
-            i += 2
-            while i < len(text) and text[i] == ' ':
-                i += 1
-        elif text[i] == '\n':
-            result.append(' ')
-            result_map.append(mapping[i])
-            i += 1
-        elif text[i] == ' ' and result and result[-1] == ' ':
-            i += 1
-        else:
-            result.append(text[i])
-            result_map.append(mapping[i])
-            i += 1
-    return ''.join(result), result_map
-
-
 def clean_html_text(html):
     """Clean HTML for alignment: strip tags, collapse whitespace.
     Returns (clean_text, mapping_to_original)."""
@@ -88,39 +59,13 @@ def clean_html_text(html):
     return ''.join(result), result_map
 
 
-def normalize_with_mapping(text):
-    """Normalize text for alignment with position tracking.
-    Returns (normalized_text, mapping) where mapping[i] gives the index
-    in the input text for normalized_text[i]."""
-    result = []
-    mapping = []
-    expansions = {'æ': 'ae', 'œ': 'oe', 'ß': 'ss'}
-    for i, ch in enumerate(text):
-        lower = ch.lower()
-        if lower == 'ſ':
-            lower = 's'
-        if lower in expansions:
-            for c in expansions[lower]:
-                result.append(c)
-                mapping.append(i)
-            continue
-        nfkd = unicodedata.normalize('NFKD', lower)
-        for c in nfkd:
-            if not unicodedata.category(c).startswith('Mn'):
-                result.append(c)
-                mapping.append(i)
-    return ''.join(result), mapping
-
-
 def load_rtml_unified():
     """Load rtml from all .terese files once.
 
-    Returns (rtml_raw, rtml_text, source_map) where:
-    - rtml_raw: concatenated rtml content WITH tags (paragraphs joined by \\n)
-    - rtml_text: tag-stripped plain text
+    Returns (rtml_text, source_map) where:
+    - rtml_text: tag-stripped plain text from all pages
     - source_map: per-character (tiff_filename, top_pixel) for rtml_text
     """
-    rtml_raw_parts = []
     rtml_text_parts = []
     source_maps = []
 
@@ -137,11 +82,9 @@ def load_rtml_unified():
             rtml_content = page_m.group(2)
             box_section = page_m.group(3)
 
-            # Collect raw rtml content
-            rtml_raw_parts.append(rtml_content)
-
-            # Parse boxes for source map
-            boxes = []
+            # Build plain text and source map directly from boxes
+            raw_chars = []
+            raw_source = []
             for bm in re.finditer(r'<box\s+c="([^"]*)"[^>]*t="(\d+)"[^>]*/>', box_section):
                 char = bm.group(1)
                 if char == '\\n':
@@ -155,50 +98,165 @@ def load_rtml_unified():
                 elif char == '&quot;':
                     char = '"'
                 top = int(bm.group(2))
-                boxes.append((char, top))
+                # Expand multi-character boxes and convert ſ→s
+                for ch in char:
+                    if ch == 'ſ':
+                        ch = 's'
+                    raw_chars.append(ch)
+                    raw_source.append((tiff_filename, top))
 
-            # Strip tags from rtml_content to get plain text
-            plain, _ = strip_tags_with_positions(rtml_content)
-
-            box_idx = 0
-            # Skip leading boundary newline box if present
-            if box_idx < len(boxes) and boxes[box_idx][0] == '\n':
-                box_idx += 1
-
-            # Build source map for this page's plain text
+            # Process line breaks: dehyphenate, convert single \n to space,
+            # collapse \n\n to single \n
+            plain_chars = []
             page_source = []
-            for ch in plain:
-                if box_idx < len(boxes):
-                    page_source.append((tiff_filename, boxes[box_idx][1]))
-                    box_idx += 1
+            i = 0
+            while i < len(raw_chars):
+                if raw_chars[i] == '-' and i + 1 < len(raw_chars) and raw_chars[i + 1] == '\n':
+                    # Remove hyphen + newline (dehyphenate)
+                    i += 2
+                elif raw_chars[i] == '\n' and i + 1 < len(raw_chars) and raw_chars[i + 1] == '\n':
+                    # Paragraph break: collapse to single \n
+                    plain_chars.append('\n')
+                    page_source.append(raw_source[i])
+                    i += 2
+                elif raw_chars[i] == '\n':
+                    # Single newline: replace with space
+                    plain_chars.append(' ')
+                    page_source.append(raw_source[i])
+                    i += 1
                 else:
-                    page_source.append((tiff_filename, 0))
+                    plain_chars.append(raw_chars[i])
+                    page_source.append(raw_source[i])
+                    i += 1
 
-            rtml_text_parts.append(plain)
+            rtml_text_parts.append(''.join(plain_chars))
             source_maps.append(page_source)
 
-    # Join raw parts with \n
-    rtml_raw = "\n".join(rtml_raw_parts)
-
-    # Join text parts with synthetic newlines
-    combined_text_parts = []
+    # Concatenate all pages
+    combined_text = ''.join(rtml_text_parts)
     combined_source = []
-    for i, (part, smap) in enumerate(zip(rtml_text_parts, source_maps)):
-        if i > 0:
-            combined_text_parts.append("\n")
-            combined_source.append((None, 0))
-        combined_text_parts.append(part)
+    for smap in source_maps:
         combined_source.extend(smap)
 
-    return rtml_raw, "".join(combined_text_parts), combined_source
+    return combined_text, combined_source
+
+
+def global_align(seq_a, seq_b, anchor_len=20, step=100):
+    """Align two long, similar sequences using anchor-based chunking.
+
+    Finds dense anchor points (exact matching substrings) between the two
+    sequences, then uses SequenceMatcher on the gap regions between anchors.
+
+    Returns a_to_b where a_to_b[i] = index in seq_b aligned to position i
+    in seq_a (or -1 for gap).
+    """
+    n = len(seq_a)
+    m = len(seq_b)
+
+    if n == 0:
+        return []
+    if m == 0:
+        return [-1] * n
+
+    a_to_b = [-1] * n
+
+    # Phase 1: Find anchors by scanning seq_a at regular intervals
+    # and finding exact matches in seq_b near the expected position.
+    anchors = []  # list of (a_pos, b_pos, length)
+    search_radius = 200  # how far from expected position to search in seq_b
+
+    ai = 0
+    drift = 0  # accumulated offset between a and b positions
+    while ai + anchor_len <= n:
+        pattern = seq_a[ai:ai + anchor_len]
+        expected_bi = ai + drift
+        found = False
+
+        bi = -1
+        for offset in range(search_radius + 1):
+            for sign in (0, 1, -1) if offset == 0 else (1, -1):
+                candidate = expected_bi + sign * offset
+                if candidate < 0 or candidate + anchor_len > m:
+                    continue
+                if seq_b[candidate:candidate + anchor_len] == pattern:
+                    bi = candidate
+                    break
+            if bi >= 0:
+                break
+
+        if bi >= 0:
+            # Extend the match as far as possible
+            end_a = ai + anchor_len
+            end_b = bi + anchor_len
+            while end_a < n and end_b < m and seq_a[end_a] == seq_b[end_b]:
+                end_a += 1
+                end_b += 1
+            # Extend backward
+            start_a = ai
+            start_b = bi
+            while start_a > 0 and start_b > 0 and seq_a[start_a - 1] == seq_b[start_b - 1]:
+                if anchors and start_a - 1 < anchors[-1][0] + anchors[-1][2]:
+                    break
+                start_a -= 1
+                start_b -= 1
+
+            length = end_a - start_a
+            # Check non-overlap with previous anchor
+            if anchors:
+                prev_a, prev_b, prev_len = anchors[-1]
+                if start_a < prev_a + prev_len or start_b < prev_b + prev_len:
+                    trim = max(prev_a + prev_len - start_a,
+                               prev_b + prev_len - start_b)
+                    start_a += trim
+                    start_b += trim
+                    length -= trim
+
+            if length >= anchor_len:
+                anchors.append((start_a, start_b, length))
+                drift = start_b - start_a
+                ai = start_a + length
+                found = True
+
+        if not found:
+            ai += step
+
+    # Phase 2: Record anchor matches in a_to_b
+    for a_start, b_start, length in anchors:
+        for k in range(length):
+            a_to_b[a_start + k] = b_start + k
+
+    # Phase 3: Align gap regions between anchors using SequenceMatcher
+    gaps = []  # (a_start, a_end, b_start, b_end)
+    prev_a_end = 0
+    prev_b_end = 0
+    for a_start, b_start, length in anchors:
+        if a_start > prev_a_end or b_start > prev_b_end:
+            gaps.append((prev_a_end, a_start, prev_b_end, b_start))
+        prev_a_end = a_start + length
+        prev_b_end = b_start + length
+    # Tail gap
+    if prev_a_end < n or prev_b_end < m:
+        gaps.append((prev_a_end, n, prev_b_end, m))
+
+    for ga_start, ga_end, gb_start, gb_end in gaps:
+        chunk_a = seq_a[ga_start:ga_end]
+        chunk_b = seq_b[gb_start:gb_end]
+        if not chunk_a or not chunk_b:
+            continue
+        sm = SequenceMatcher(None, chunk_a, chunk_b, autojunk=False)
+        for block in sm.get_matching_blocks():
+            for k in range(block.size):
+                a_to_b[ga_start + block.a + k] = gb_start + block.b + k
+
+    return a_to_b
 
 
 def compute_full_alignment(html):
-    """Compute alignment between HTML and rtml source.
+    """Compute global alignment between HTML and rtml source.
 
-    Returns an AlignmentResult with para_alignments (for spurious break
-    detection) and matching_blocks/norm maps/source_map (for orth source
-    attribution). Results are cached to disk as a pickle.
+    Returns an AlignmentResult with html_to_rtml mapping, rtml_dashes,
+    and norm maps/source_map for orth source attribution.
+    Results are cached to disk as a pickle.
     """
     html_hash = hashlib.sha256(html.encode()).hexdigest()
 
@@ -210,121 +268,23 @@ def compute_full_alignment(html):
     except (FileNotFoundError, pickle.UnpicklingError, KeyError, EOFError):
         pass
 
-    rtml_raw, rtml_text, source_map = load_rtml_unified()
+    rtml_text, source_map = load_rtml_unified()
 
     result = AlignmentResult()
     result.source_map = source_map
 
-    # --- Prepare rtml paragraphs ---
-    rtml_paras = []
-    for para in re.split(r'\n\n+', rtml_raw):
-        if not para.strip():
-            continue
-        clean, _ = clean_rtml(para)
-        norm, norm_to_clean = normalize_with_mapping(clean)
-        hw_m = re.match(r'[a-z]+', norm)
-        hw = hw_m.group(0) if hw_m else ''
-        dashes = frozenset(i for i, ch in enumerate(clean) if ch == '—')
-        rtml_paras.append((hw, norm, norm_to_clean, dashes))
+    # Compute rtml dash positions directly in box text
+    rtml_dashes = frozenset(i for i, ch in enumerate(rtml_text) if ch == '—')
+    result.rtml_dashes = rtml_dashes
 
-    # --- Prepare HTML paragraphs ---
-    para_matches = list(re.finditer(r'<p>(.*?)</p>', html, re.DOTALL))
-    html_paras = []
-    for pm in para_matches:
-        content = pm.group(1)
-        clean, clean_to_html = clean_html_text(content)
-        clean_to_html_abs = [pm.start(1) + p for p in clean_to_html]
-        norm, norm_to_clean = normalize_with_mapping(clean)
-        hw_m = re.match(r'[a-z]+', norm)
-        hw = hw_m.group(0) if hw_m else ''
-        html_paras.append((hw, norm, norm_to_clean, clean_to_html_abs,
-                           pm.start(1), pm.end(1)))
-
-    # --- Greedy headword alignment ---
-    aligned = []
-    ri = 0
-    for hi, hp in enumerate(html_paras):
-        h_hw = hp[0]
-        if not h_hw:
-            continue
-        for j in range(ri, min(ri + 20, len(rtml_paras))):
-            if rtml_paras[j][0] == h_hw:
-                aligned.append((hi, j))
-                ri = j + 1
-                break
-
-    # --- Build global norm sequences for orth_sources ---
-    # Normalize full rtml_text
-    rtml_norm, rtml_norm_map = normalize_with_mapping(rtml_text)
-    result.rtml_norm_map = rtml_norm_map
-
-    # Normalize full html plain text
+    # Clean HTML: strip tags, collapse whitespace
     html_plain, html_plain_map = clean_html_text(html)
-    html_norm, html_norm_to_plain = normalize_with_mapping(html_plain)
-    html_norm_to_html = [html_plain_map[j] for j in html_norm_to_plain]
-    result.html_norm_to_html = html_norm_to_html
+    result.html_plain_map = html_plain_map
 
-    # Build rtml_raw paragraph bounds and mapping for global block offsets
-    rtml_raw_para_bounds = []
-    prev_end = 0
-    for m in re.finditer(r'\n\n+', rtml_raw):
-        para = rtml_raw[prev_end:m.start()]
-        if para.strip():
-            rtml_raw_para_bounds.append((prev_end, m.start()))
-        prev_end = m.end()
-    last_para = rtml_raw[prev_end:]
-    if last_para.strip():
-        rtml_raw_para_bounds.append((prev_end, len(rtml_raw)))
-
-    # Mapping: raw position → rtml_text position
-    _, raw_pos_for_rtml_text = strip_tags_with_positions(rtml_raw)
-
-    # --- Per-paragraph alignment ---
-    matching_blocks = []
-
-    for hi, rj in aligned:
-        _, h_norm, h_n2c, h_c2h, h_start, h_end = html_paras[hi]
-        _, r_norm, r_n2c, r_dashes = rtml_paras[rj]
-
-        # For spurious_breaks: SequenceMatcher on per-paragraph cleaned norms
-        sm = SequenceMatcher(None, h_norm, r_norm, autojunk=False)
-        h_to_r = {}
-        for block in sm.get_matching_blocks():
-            for k in range(block.size):
-                h_to_r[block.a + k] = block.b + k
-
-        result.para_alignments.append(
-            (h_to_r, r_dashes, h_norm, h_n2c, h_c2h, h_start, h_end, r_n2c)
-        )
-
-        # For orth_sources: SequenceMatcher on slices of global norm sequences
-        # (different from above because global rtml_norm doesn't have hyphen removal)
-        hn_start = bisect.bisect_left(html_norm_to_html, h_start)
-        hn_end = bisect.bisect_right(html_norm_to_html, h_end - 1)
-        if hn_start >= hn_end:
-            continue
-
-        if rj >= len(rtml_raw_para_bounds):
-            continue
-        rp_start_raw, rp_end_raw = rtml_raw_para_bounds[rj]
-        rp_start = bisect.bisect_left(raw_pos_for_rtml_text, rp_start_raw)
-        rp_end = bisect.bisect_left(raw_pos_for_rtml_text, rp_end_raw)
-        rn_start = bisect.bisect_left(rtml_norm_map, rp_start)
-        rn_end = bisect.bisect_right(rtml_norm_map, rp_end - 1)
-        if rn_start >= rn_end:
-            continue
-
-        h_slice = html_norm[hn_start:hn_end]
-        r_slice = rtml_norm[rn_start:rn_end]
-        sm2 = SequenceMatcher(None, h_slice, r_slice, autojunk=False)
-        for block in sm2.get_matching_blocks():
-            if block.size > 0:
-                matching_blocks.append(
-                    (hn_start + block.a, rn_start + block.b, block.size)
-                )
-
-    matching_blocks.sort()
-    result.matching_blocks = matching_blocks
+    # Global alignment directly between cleaned texts
+    print(f"  Aligning {len(html_plain)} html chars with {len(rtml_text)} rtml chars...")
+    html_to_rtml = global_align(html_plain, rtml_text)
+    result.html_to_rtml = html_to_rtml
 
     with open(_ALIGNMENT_CACHE, 'wb') as f:
         pickle.dump({'html_hash': html_hash, 'result': result}, f, protocol=pickle.HIGHEST_PROTOCOL)
