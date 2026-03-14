@@ -41,7 +41,7 @@ def postprocess(html):
     html = re.sub(r" *<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: (" " + x.group(1)) if x.group(1)[-1] == ';' else x.group(0), html)
     html = re.sub(' *</b> *</span> *<br/> *\n *<span> *<b> *', ' ', html)
     html = html.replace(". . .", "…")
-    html = re.sub(r'(\d)—(\d)', r'\1–\2', html)
+    html = re.sub(r'(\d) *— *(\d)', r'\1–\2', html)
     html = re.sub(' *</span> *<br/> *\n<span> *', ' ', html)
     html = html.replace('Varro 1. l. ', 'Varro l. l. ').replace('Varr. 1. l. ', 'Varr. l. l. ')
     html = html.replace('C<i>', '<i>C')
@@ -118,6 +118,8 @@ def postprocess(html):
         return m.group(0)
 
     html = re.sub(r'([^\s<>]+(?:</[^>]*>)*) *<br/>\n(<orth>)', join_or_keep, html)
+
+    html = html.replace('<span>m. m.</span> <orth><u>Aedīlĭcius</u>', '<span>m. m.</span><br/>\n<orth><u>Aedīlĭcius</u>')
 
     alignment = compute_full_alignment(html)
     orth_attrs = compute_orth_sources(html, alignment)

@@ -21,20 +21,12 @@ def _compute_dash_break_positions(html, alignment):
 
         # Look up corresponding rtml position
         rtml_pos = html_to_rtml[h_plain_pos]
-        if rtml_pos == -1:
-            # Try nearby positions
-            for delta in range(1, 4):
-                if h_plain_pos + delta < len(html_to_rtml) and html_to_rtml[h_plain_pos + delta] >= 0:
-                    rtml_pos = html_to_rtml[h_plain_pos + delta]
-                    break
-                if h_plain_pos - delta >= 0 and html_to_rtml[h_plain_pos - delta] >= 0:
-                    rtml_pos = html_to_rtml[h_plain_pos - delta]
-                    break
+
         if rtml_pos < 0:
             continue
 
         # Check if nearby rtml position is a dash
-        if any((rtml_pos + offset) in rtml_dashes for offset in range(-2, 3)):
+        if (rtml_pos - 2) in rtml_dashes:
             dash_break_positions.add(bm.start())
 
     return dash_break_positions
@@ -49,11 +41,11 @@ def remove_spurious_breaks(html, alignment):
     def replace_break(m):
         after = html[m.end():m.end() + 30]
         if SENSE_RE.match(after):
-            return m.group(0)
+            return '<br/>\n'
         if after.startswith('<orth>'):
-            return m.group(0)
+            return '<br/>\n'
         if m.start() in dash_break_positions:
-            return ' —' +m.group(0)
+            return ' —<br/>\n'
         return ' '
 
     html = re.sub(r' *<br/>\n', replace_break, html)
