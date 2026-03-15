@@ -38,6 +38,7 @@ def postprocess(html):
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub(r" *<br/> *\n([a-z]\.) *<br/> *\n<u>", r"<br/>\n\1 <u>", html)
     html = html.replace("<p><br/>\n", "<p>")
+    html = re.sub(r'^(<p>(?:[IV]+|\d+)\.) *<br/>\n', r'\1 ', html, flags=re.MULTILINE)
     html = re.sub(' *<br/> *\n *<br/> *\n *', '<br/>\n', html)
     html = re.sub(r" *<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)", lambda x: (" " + x.group(1)) if x.group(1)[-1] == ';' else x.group(0), html)
     html = re.sub(' *</b> *</span> *<br/> *\n *<span> *<b> *', ' ', html)
@@ -52,14 +53,17 @@ def postprocess(html):
     html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 
     # Locate headwords
-    HW = r'(\(?<[bu]>[^<]*</[bu]>[^\s<]*|[^\s<]+)'
-    html = re.sub(r"^(<p>(?:[IV]+\.\s+)?)" + HW,
+    # A headword may span multiple consecutive <b>/<u> tag groups
+    # (e.g. <b>S</b><u>ŭpĕrēnăto</u>), so allow additional tags after the first.
+    HW_TAIL = r'(?:<[bu]>[^<]*</[bu]>)*[^\s<]*'
+    HW = r'(\(?<[bu]>[^<]*</[bu]>' + HW_TAIL + r'|[^\s<]+)'
+    html = re.sub(r"^(<p>(?:(?:[IV]+|\d+)\.\s+)?)" + HW,
                   lambda x: x.group(1) + "<orth>" + x.group(2) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"^(<[bu]>[^<]*</[bu]>[^\s<]*)",
+    html = re.sub(r"^(<[bu]>[^<]*</[bu]>" + HW_TAIL + r")",
                   lambda x: "<orth>" + x.group(1) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"^(\(<[bu]>[^<]*</[bu]>\)?[^\s<]*)",
+    html = re.sub(r"^(\(<[bu]>[^<]*</[bu]>\)?" + HW_TAIL + r")",
                   lambda x: "<orth>" + x.group(1) + "</orth>",
                   html, flags=re.MULTILINE)
     html = re.sub(r"^(\([A-ZĀĂĒĔĪĬŌŎŪŬ][^\s<]*)",
