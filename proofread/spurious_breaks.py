@@ -38,11 +38,24 @@ def remove_spurious_breaks(html, alignment, rtml):
 
     SENSE_RE = re.compile(r'^(?:[0-9]+\.|[IVX]+\.|([a-z])\1?\.|[A-Z]\.|[α-ω]\.)')
 
+    # Precompute positions of <br/>\n where a bare sense marker line precedes
+    # an <orth> — these are column-break artifacts to be removed.
+    BARE_SENSE_BEFORE_ORTH = re.compile(
+        r'\n\s*(?:[0-9]+|[IVX]+|(?P<l>[a-z])(?P=l)?|[A-Z]|[α-ω])[.,;]? *<br/>\n<orth>'
+    )
+    sense_orth_break_positions = set()
+    for sm in BARE_SENSE_BEFORE_ORTH.finditer(html):
+        # Find the start of the <br/>\n just before <orth>
+        br_pos = html.rfind('<br/>\n', sm.start(), sm.end())
+        sense_orth_break_positions.add(br_pos)
+
     def replace_break(m):
         after = html[m.end():m.end() + 30]
         if SENSE_RE.match(after):
             return '<br/>\n'
         if after.startswith('<orth>'):
+            if m.start() in sense_orth_break_positions:
+                return '\n'
             return '<br/>\n'
         if m.start() in dash_break_positions:
             return ' —<br/>\n'

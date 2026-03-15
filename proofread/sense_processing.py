@@ -158,12 +158,16 @@ def split_paragraphs_at_orths(html):
         full_para = match.group(0)
         para_content = match.group(1)
 
-        # Split content into lines at <br/>\n boundaries
+        # Each fodt <p> may contain multiple dictionary entries separated by
+        # <br/>\n. Split into individual lines to analyse them.
         lines = para_content.split('<br/>\n')
         if len(lines) <= 1:
             return full_para
 
-        # Extract sense markers from lines[1:] (skip headword line)
+        # Collect sense markers (e.g. "1.", "a.", "IV.") from all lines after
+        # the first (which is the headword line). marker_line_indices records
+        # which line each marker came from, so we can later test whether
+        # splitting at a given orth line would break a valid marker sequence.
         markers = []
         marker_line_indices = []
         for li in range(1, len(lines)):
@@ -175,14 +179,16 @@ def split_paragraphs_at_orths(html):
                 markers.append((marker, mtype, mval, punct))
                 marker_line_indices.append(li)
 
-        # Find line-initial orth candidates (lines starting with <orth>)
+        # Find line-initial orth candidates: lines starting with <orth> that
+        # could mark the beginning of a new dictionary entry.
         candidate_orth_lines = []
         for li in range(1, len(lines)):
             if ORTH_INITIAL_RE.match(lines[li]):
                 candidate_orth_lines.append(li)
 
-        # Find inline orth candidates (lines containing <orth> but not at start,
-        # and not starting with a sense marker)
+        # Find inline orth candidates: lines that contain <orth> somewhere in
+        # the middle (not at start) and don't begin with a sense marker. These
+        # are a secondary source of potential split points.
         inline_orth_lines = []
         for li in range(1, len(lines)):
             if ORTH_INITIAL_RE.match(lines[li]):
@@ -192,13 +198,15 @@ def split_paragraphs_at_orths(html):
             if ORTH_ANY_RE.search(lines[li]):
                 inline_orth_lines.append(li)
 
-        # Initialize per-line tags
+        # Per-line tags: 'keep' = preserve original <br/>\n,
+        # 'split' = start a new <p>, 'join' = merge with previous line via <br/>
         line_tags = ['keep'] * len(lines)
 
         if not candidate_orth_lines:
-            # No line-initial orths to split at; check sequence validity
+            # No line-initial orths to split at. If the sense marker sequence
+            # is broken, try inline orths as emergency split points; otherwise
+            # return the paragraph unchanged.
             if len(markers) >= 2 and not is_sequence_valid(markers):
-                # Try inline orths as split points
                 for li in inline_orth_lines:
                     if try_partition_combination(markers, [li], marker_line_indices):
                         line_tags[li] = 'split'
@@ -207,13 +215,16 @@ def split_paragraphs_at_orths(html):
             return full_para
 
         if len(markers) < 2:
-            # No sense sequence to protect — all candidate orths become splits
+            # Fewer than 2 sense markers means there is no sequence to
+            # protect, so every candidate orth line is safe to split at.
             for li in candidate_orth_lines:
                 line_tags[li] = 'split'
         else:
             last_marker_li = marker_line_indices[-1]
 
-            # Orths after the last marker can always be splits
+            # Orth lines after the last sense marker can always be split —
+            # they can't disrupt the marker sequence. Orth lines interspersed
+            # among markers ("between_markers") need combinatorial checking.
             always_break = []
             between_markers = []
             for li in candidate_orth_lines:
@@ -222,8 +233,10 @@ def split_paragraphs_at_orths(html):
                 else:
                     between_markers.append(li)
 
-            # Try all 2^n combinations of between-markers line-initial orths
-            # and (if feasible) inline orths
+            # Try all 2^n combinations of potential split points (both
+            # between-marker orths and inline orths) to find which ones keep
+            # every partition's sense sequence valid. Cap at 20 bits to avoid
+            # exponential blowup; if exceeded, skip inline candidates.
             n_bm = len(between_markers)
             n_il = len(inline_orth_lines)
             if n_bm + n_il > 20:
@@ -243,8 +256,10 @@ def split_paragraphs_at_orths(html):
                     valid_perms.append((set(active_line), set(active_inline)))
 
             if not valid_perms:
+                # No combination of splits keeps all marker sequences valid.
                 return '<p>!!!' + para_content + '</p>'
 
+            # A line becomes a split if it appears in *any* valid combination.
             for li in always_break:
                 line_tags[li] = 'split'
             for li in between_markers:
@@ -254,7 +269,8 @@ def split_paragraphs_at_orths(html):
                 if any(li in vp[1] for vp in valid_perms):
                     line_tags[li] = 'split'
 
-        # Non-split line-initial orths get joined
+        # Line-initial orths that weren't chosen as splits still shouldn't
+        # keep a bare <br/>\n — join them to the previous line with ' <br/>'.
         for li in candidate_orth_lines:
             if line_tags[li] != 'split':
                 line_tags[li] = 'join'
