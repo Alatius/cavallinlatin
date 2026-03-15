@@ -2,14 +2,14 @@ import bisect
 import re
 
 
-def _compute_dash_break_positions(html, alignment):
+def _compute_dash_break_positions(html, alignment, rtml):
     """Compute absolute HTML positions of <br/> tags that correspond to
     em-dashes in the rtml source, using pre-computed global alignment."""
     dash_break_positions = set()
 
     html_plain_map = alignment.html_plain_map
     html_to_rtml = alignment.html_to_rtml
-    rtml_dashes = alignment.rtml_dashes
+    rtml_dashes = rtml.dashes
 
     for bm in re.finditer(r' *<br/>\n', html):
         break_end_abs = bm.end()
@@ -32,9 +32,9 @@ def _compute_dash_break_positions(html, alignment):
     return dash_break_positions
 
 
-def remove_spurious_breaks(html, alignment):
+def remove_spurious_breaks(html, alignment, rtml):
     """Remove <br/> tags that don't correspond to em-dashes in the rtml source."""
-    dash_break_positions = _compute_dash_break_positions(html, alignment)
+    dash_break_positions = _compute_dash_break_positions(html, alignment, rtml)
 
     SENSE_RE = re.compile(r'^(?:[0-9]+\.|[IVX]+\.|([a-z])\1?\.|[A-Z]\.|[α-ω]\.)')
 

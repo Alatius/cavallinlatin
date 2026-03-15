@@ -64,18 +64,29 @@ def _css_class(mtype):
 
 
 def split_paragraphs_at_orths(html):
+    """Split paragraphs at line-initial <orth> tags into separate <p> elements.
+
+    Each fodt paragraph may contain multiple dictionary entries separated by
+    <br/>\n. This function decides which <orth> tags mark new entries vs.
+    sub-headwords within the same entry, by checking that sense marker
+    sequences (1., a., α., etc.) remain valid after splitting.
+
+    Lines where splitting is not possible are joined with ' <br/>' instead.
+    Paragraphs where no valid split combination exists are prefixed with !!!
+    for manual review.
     """
-    Split paragraphs at line-initial <orth> tags when doing so does not break
-    valid sense number sequences. Orths that cannot be split (because they'd
-    break a sequence) are joined with " — " instead.
-    """
+
+    SENSE_RE = re.compile(
+        r'^\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<)'
+    )
+    ORTH_INITIAL_RE = re.compile(r'^<orth[^>]*>')
+    ORTH_ANY_RE = re.compile(r'<orth[^>]*>')
 
     def is_sequence_valid(markers_to_check):
         """Check if a sequence of markers is valid using stack-based nesting."""
         if len(markers_to_check) < 1:
             return True
 
-        # Stack of (level, last_value) mirroring convert_senses_to_lists
         stack = []
 
         for marker, mtype, mval, punct in markers_to_check:
@@ -85,18 +96,15 @@ def split_paragraphs_at_orths(html):
             if level is None:
                 continue
 
-            # Pop deeper levels (returning to a shallower nesting)
             while stack and stack[-1][0] > level:
                 stack.pop()
 
             if stack and stack[-1][0] == level:
-                # Sibling: must be exactly prev + 1
                 prev_val = stack[-1][1]
                 if mval != prev_val + 1:
                     return False
                 stack[-1] = (level, mval)
             else:
-                # New nested level (or first marker): check initial value
                 if mtype in ('letter', 'letter_upper', 'double_letter', 'greek'):
                     if mval != 0:
                         return False
@@ -107,17 +115,17 @@ def split_paragraphs_at_orths(html):
 
         return True
 
-    def try_partition_combination(markers, active_resets, marker_positions):
-        """Try a specific combination of reset points and check if all partitions are valid."""
+    def try_partition_combination(markers, active_resets, marker_line_indices):
+        """Try a specific combination of reset line indices and check if all partitions are valid."""
         if not active_resets:
             return is_sequence_valid(markers)
 
         current_partition = []
-        for i, (pos, marker_info) in enumerate(zip(marker_positions, markers)):
+        for i, (li, marker_info) in enumerate(zip(marker_line_indices, markers)):
             should_reset = False
             if i > 0:
-                for orth_pos in active_resets:
-                    if marker_positions[i-1] < orth_pos < pos:
+                for reset_li in active_resets:
+                    if marker_line_indices[i-1] < reset_li < li:
                         should_reset = True
                         break
 
@@ -133,165 +141,127 @@ def split_paragraphs_at_orths(html):
 
         return True
 
+    def reassemble(lines, line_tags):
+        """Reassemble lines into paragraph(s) based on per-line tags."""
+        parts = [lines[0]]
+        for i in range(1, len(lines)):
+            if line_tags[i] == 'split':
+                parts.append('</p>\n\n<p>')
+            elif line_tags[i] == 'join':
+                parts.append(' <br/>')
+            else:
+                parts.append('<br/>\n')
+            parts.append(lines[i])
+        return '<p>' + ''.join(parts) + '</p>'
+
     def process_paragraph(match):
         full_para = match.group(0)
         para_content = match.group(1)
 
-        # Find the first <br/> to skip headword line
-        first_br = para_content.find('<br/>')
-        content_for_markers = para_content[first_br:] if first_br >= 0 else para_content
-        offset = first_br if first_br >= 0 else 0
-
-        # Extract sense markers (after <br/>\n)
-        sense_pattern = r'(?:<br/>\n)\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<)'
-        markers = []
-        marker_positions = []
-        for m in re.finditer(sense_pattern, content_for_markers, re.MULTILINE):
-            marker = m.group(1)
-            punct = m.group(2)
-            mtype, mval = get_marker_type_and_value(marker)
-            markers.append((marker, mtype, mval, punct))
-            marker_positions.append(offset + m.start())
-
-        # Find candidate orth split points: line-initial <orth> tags (preceded by <br/>\n)
-        candidate_orths = []
-        candidate_orth_positions = []
-        candidate_orth_tags = []
-        for m in re.finditer(r'<br/>\n(<orth[^>]*>)', para_content):
-            candidate_orths.append(m)
-            candidate_orth_positions.append(m.start())
-            candidate_orth_tags.append(m.group(1))
-
-        # All <orth> positions (including inline) for sequence validity checking
-        all_orth_positions = [m.start() for m in re.finditer(r'<orth[^>]*>', para_content)]
-
-        # Helper: check if any combination of the given orth positions makes the
-        # marker sequence valid (used for !!! detection)
-        def any_valid_partition(orth_positions):
-            n = len(orth_positions)
-            if n > 20:
-                return True  # too many to check, assume valid
-            for mask in range(1 << n):
-                active = [orth_positions[i] for i in range(n) if (mask >> i) & 1]
-                if try_partition_combination(markers, active, marker_positions):
-                    return True
-            return False
-
-        # Inline orths (not line-initial) that can serve as reset/split points
-        candidate_orth_set = set(candidate_orth_positions)
-        # Exclude inline orths on lines that start with a sense number,
-        # since splitting there would break the sense numbering.
-        sense_line_re = re.compile(r'<br/>\n\s*(?:[0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])[.,;]?\s')
-        def is_on_sense_line(orth_pos):
-            br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
-            return br_pos >= 0 and sense_line_re.match(para_content, br_pos)
-        inline_orth_positions = [p for p in all_orth_positions
-                                 if p not in candidate_orth_set
-                                 and not is_on_sense_line(p)]
-
-        if not candidate_orths:
-            # No line-initial orths to split at; still check sequence validity
-            if len(markers) >= 2 and not is_sequence_valid(markers):
-                # Try inline orths as split points
-                for orth_pos in inline_orth_positions:
-                    if try_partition_combination(markers, [orth_pos], marker_positions):
-                        # Find the <br/>\n before this orth to split there
-                        br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
-                        if br_pos >= 0:
-                            br_end = br_pos + len('<br/>\n')
-                            result = para_content[:br_pos] + '</p>\n\n<p>' + para_content[br_end:]
-                            return '<p>' + result
-                return '<p>!!!' + para_content
+        # Split content into lines at <br/>\n boundaries
+        lines = para_content.split('<br/>\n')
+        if len(lines) <= 1:
             return full_para
 
-        # If no markers or only 1 marker, all candidate orths become paragraph breaks
-        inline_break_positions = set()
+        # Extract sense markers from lines[1:] (skip headword line)
+        markers = []
+        marker_line_indices = []
+        for li in range(1, len(lines)):
+            m = SENSE_RE.match(lines[li])
+            if m:
+                marker = m.group(1)
+                punct = m.group(2)
+                mtype, mval = get_marker_type_and_value(marker)
+                markers.append((marker, mtype, mval, punct))
+                marker_line_indices.append(li)
+
+        # Find line-initial orth candidates (lines starting with <orth>)
+        candidate_orth_lines = []
+        for li in range(1, len(lines)):
+            if ORTH_INITIAL_RE.match(lines[li]):
+                candidate_orth_lines.append(li)
+
+        # Find inline orth candidates (lines containing <orth> but not at start,
+        # and not starting with a sense marker)
+        inline_orth_lines = []
+        for li in range(1, len(lines)):
+            if ORTH_INITIAL_RE.match(lines[li]):
+                continue
+            if SENSE_RE.match(lines[li]):
+                continue
+            if ORTH_ANY_RE.search(lines[li]):
+                inline_orth_lines.append(li)
+
+        # Initialize per-line tags
+        line_tags = ['keep'] * len(lines)
+
+        if not candidate_orth_lines:
+            # No line-initial orths to split at; check sequence validity
+            if len(markers) >= 2 and not is_sequence_valid(markers):
+                # Try inline orths as split points
+                for li in inline_orth_lines:
+                    if try_partition_combination(markers, [li], marker_line_indices):
+                        line_tags[li] = 'split'
+                        return reassemble(lines, line_tags)
+                return '<p>!!!' + para_content + '</p>'
+            return full_para
+
         if len(markers) < 2:
-            break_positions = set(candidate_orth_positions)
+            # No sense sequence to protect — all candidate orths become splits
+            for li in candidate_orth_lines:
+                line_tags[li] = 'split'
         else:
-            # Find which candidate orths are between markers (and thus affect sequences)
-            last_marker_pos = marker_positions[-1] if marker_positions else -1
+            last_marker_li = marker_line_indices[-1]
 
-            # Orths after the last marker can always be breaks
-            always_break = set()
+            # Orths after the last marker can always be splits
+            always_break = []
             between_markers = []
-            between_markers_positions = []
-            for i, pos in enumerate(candidate_orth_positions):
-                if pos > last_marker_pos:
-                    always_break.add(pos)
+            for li in candidate_orth_lines:
+                if li > last_marker_li:
+                    always_break.append(li)
                 else:
-                    between_markers.append(i)
-                    between_markers_positions.append(pos)
+                    between_markers.append(li)
 
-            # Try all 2^n combinations of the between-markers line-initial orths,
-            # and for each, also try all 2^m combinations of inline orths
-            n = len(between_markers)
-            m = len(inline_orth_positions)
-            if n + m > 20:
-                # Too many candidates; just use line-initial orths without inline
-                total_bits = n
-                use_inline_combos = False
+            # Try all 2^n combinations of between-markers line-initial orths
+            # and (if feasible) inline orths
+            n_bm = len(between_markers)
+            n_il = len(inline_orth_lines)
+            if n_bm + n_il > 20:
+                total_bits = n_bm
+                use_inline = False
             else:
-                total_bits = n + m
-                use_inline_combos = True
+                total_bits = n_bm + n_il
+                use_inline = True
 
-            valid_permutations = []
+            valid_perms = []
             for mask in range(1 << total_bits):
-                active_line_resets = [between_markers_positions[i] for i in range(n) if (mask >> i) & 1]
-                if use_inline_combos:
-                    active_inline_resets = [inline_orth_positions[i] for i in range(m) if (mask >> (n + i)) & 1]
-                else:
-                    active_inline_resets = []
-                all_resets = active_line_resets + list(always_break) + active_inline_resets
-                if try_partition_combination(markers, all_resets, marker_positions):
-                    valid_permutations.append((set(active_line_resets), set(active_inline_resets)))
+                active_line = [between_markers[i] for i in range(n_bm) if (mask >> i) & 1]
+                active_inline = ([inline_orth_lines[i] for i in range(n_il) if (mask >> (n_bm + i)) & 1]
+                                 if use_inline else [])
+                all_resets = active_line + always_break + active_inline
+                if try_partition_combination(markers, all_resets, marker_line_indices):
+                    valid_perms.append((set(active_line), set(active_inline)))
 
-            # No valid permutations — mark for manual review, don't modify
-            if not valid_permutations:
-                return '<p>!!!' + para_content
+            if not valid_perms:
+                return '<p>!!!' + para_content + '</p>'
 
-            # Classify each candidate line-initial orth
-            break_positions = set(always_break)
-            for i, pos in enumerate(between_markers_positions):
-                is_break_in_any = any(pos in vp[0] for vp in valid_permutations)
-                if is_break_in_any:
-                    break_positions.add(pos)
+            for li in always_break:
+                line_tags[li] = 'split'
+            for li in between_markers:
+                if any(li in vp[0] for vp in valid_perms):
+                    line_tags[li] = 'split'
+            for li in inline_orth_lines:
+                if any(li in vp[1] for vp in valid_perms):
+                    line_tags[li] = 'split'
 
-            # Collect inline orths that appear in any valid permutation
-            inline_break_positions = set()
-            for _, inline_set in valid_permutations:
-                inline_break_positions |= inline_set
+        # Non-split line-initial orths get joined
+        for li in candidate_orth_lines:
+            if line_tags[li] != 'split':
+                line_tags[li] = 'join'
 
-        # Collect all split operations: (start_pos, end_pos, replacement)
-        # Process from end to start to preserve positions
-        operations = []
+        return reassemble(lines, line_tags)
 
-        # Line-initial orth operations
-        for i in range(len(candidate_orths)):
-            m = candidate_orths[i]
-            pos = candidate_orth_positions[i]
-            orth_tag = candidate_orth_tags[i]
-            if pos in break_positions:
-                operations.append((m.start(), m.end(), f'</p>\n\n<p>{orth_tag}'))
-            else:
-                operations.append((m.start(), m.end(), f' </br>{orth_tag}'))
-
-        # Inline orth split operations (split at preceding <br/>\n)
-        for orth_pos in inline_break_positions:
-            br_pos = para_content.rfind('<br/>\n', 0, orth_pos)
-            if br_pos >= 0:
-                operations.append((br_pos, br_pos + len('<br/>\n'), '</p>\n\n<p>'))
-
-        # Apply from end to start
-        result = para_content
-        for start, end, replacement in sorted(operations, key=lambda x: x[0], reverse=True):
-            result = result[:start] + replacement + result[end:]
-
-        return '<p>' + result
-
-    # Match each paragraph
-    html = re.sub(r'<p>(.*?)(?=<p>|$)', process_paragraph, html, flags=re.DOTALL)
-
+    html = re.sub(r'<p>(.*?)</p>', process_paragraph, html, flags=re.DOTALL)
     return html
 
 
@@ -308,19 +278,10 @@ def convert_senses_to_lists(html):
         if para_content.startswith('!!!'):
             return full_para
 
-        # Strip </p> and trailing whitespace so closing tags end up inside the paragraph
-        suffix = ''
-        stripped = para_content
-        close_idx = stripped.rfind('</p>')
-        if close_idx >= 0:
-            suffix = stripped[close_idx:]
-            stripped = stripped[:close_idx]
-        para_content = stripped
-
         # Find the first <br/> to skip headword line
         first_br = para_content.find('<br/>')
         if first_br < 0:
-            return '<p>' + para_content + suffix
+            return '<p>' + para_content + '</p>'
         content_after_hw = para_content[first_br:]
 
         # Find all sense markers after the headword
@@ -369,12 +330,11 @@ def convert_senses_to_lists(html):
                     stack.pop()
                 # Sibling
                 if stack and stack[-1] == level:
-                    output.append('</li>')
-                    output.append('\n<li>')
+                    output.append('</li> <li>')
                 else:
                     # New nested level
                     css_class = _css_class(mtype)
-                    output.append(f'\n<ol class="{css_class}"><li>')
+                    output.append(f' <ol class="{css_class}"><li>')
                     stack.append(level)
 
         # Append trailing content
@@ -385,7 +345,7 @@ def convert_senses_to_lists(html):
             output.append('</li></ol>')
             stack.pop()
 
-        return '<p>' + ''.join(output) + suffix
+        return '<p>' + ''.join(output) + '</p>'
 
-    html = re.sub(r'<p>(.*?)(?=<p>|$)', process_paragraph, html, flags=re.DOTALL)
+    html = re.sub(r'<p>(.*?)</p>', process_paragraph, html, flags=re.DOTALL)
     return html

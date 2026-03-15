@@ -1,12 +1,11 @@
-from os import remove
 import re
 import unicodedata
 
-from text_alignment import compute_full_alignment
+from text_alignment import load_rtml, align_html
 from spurious_breaks import remove_spurious_breaks
 from sense_processing import split_paragraphs_at_orths, convert_senses_to_lists
-from orth_sources import compute_orth_sources, apply_orth_attrs
-from prune_references import prune_reference_entries
+from source_attrs import compute_element_sources, apply_source_attrs, insert_original_linebreaks
+from prune_references import mark_reference_entries
 
 
 def remove_accents(input_str):
@@ -31,6 +30,8 @@ def is_sense_number(text):
 
 
 def postprocess(html):
+    # === Phase 1: Text cleanup (no alignment needed) ===
+
     # Clean up some mistakes
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
@@ -51,20 +52,20 @@ def postprocess(html):
     html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 
     # Locate headwords
-    HW = r'(<[bu]>[^<]*</[bu]>\S*|\S+)'
+    HW = r'(\(?<[bu]>[^<]*</[bu]>[^\s<]*|[^\s<]+)'
     html = re.sub(r"^(<p>(?:[IV]+\.\s+)?)" + HW,
                   lambda x: x.group(1) + "<orth>" + x.group(2) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"^(<[bu]>[^<]*</[bu]>\S*)",
+    html = re.sub(r"^(<[bu]>[^<]*</[bu]>[^\s<]*)",
                   lambda x: "<orth>" + x.group(1) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"^(\(<[bu]>[^<]*</[bu]>\)?\S*)",
+    html = re.sub(r"^(\(<[bu]>[^<]*</[bu]>\)?[^\s<]*)",
                   lambda x: "<orth>" + x.group(1) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"^(\([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)",
+    html = re.sub(r"^(\([A-ZĀĂĒĔĪĬŌŎŪŬ][^\s<]*)",
                   lambda x: "<orth>" + x.group(1) + "</orth>",
                   html, flags=re.MULTILINE)
-    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ]\S*)",
+    html = re.sub(r"<br/>\n([A-ZĀĂĒĔĪĬŌŎŪŬ][^\s<]*)",
                   lambda x: "<br/>\n<orth>" + x.group(1) + "</orth>" if not is_sense_number(x.group(1)) else x.group(0),
                   html)
 
@@ -121,15 +122,20 @@ def postprocess(html):
 
     html = html.replace('<span>m. m.</span> <orth><u>Aedīlĭcius</u>', '<span>m. m.</span><br/>\n<orth><u>Aedīlĭcius</u>')
 
-    alignment = compute_full_alignment(html)
-    orth_attrs = compute_orth_sources(html, alignment)
-    html = remove_spurious_breaks(html, alignment)
-    html = apply_orth_attrs(html, orth_attrs)
+    # === Phase 2: First alignment (spurious break removal only) ===
+    rtml = load_rtml()
+    alignment1 = align_html(html, rtml)
+    html = remove_spurious_breaks(html, alignment1, rtml)
 
+    # === Phase 3: Structural transforms (no alignment needed) ===
     html = split_paragraphs_at_orths(html)
-
     html = convert_senses_to_lists(html)
+    html = mark_reference_entries(html)
 
-    html = prune_reference_entries(html)
+    # === Phase 4: Second alignment (source attrs + line breaks) ===
+    alignment2 = align_html(html, rtml)
+    orth_attrs, li_attrs = compute_element_sources(html, alignment2, rtml)
+    html = insert_original_linebreaks(html, alignment2, rtml)
+    html = apply_source_attrs(html, orth_attrs, li_attrs)
 
     return html

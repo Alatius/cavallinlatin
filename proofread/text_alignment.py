@@ -1,23 +1,26 @@
 import glob
-import hashlib
 import os
-import pickle
 import re
 from difflib import SequenceMatcher
 
-_ALIGNMENT_CACHE = os.path.join(os.path.dirname(__file__), '.alignment_cache.pkl')
+
+class RtmlData:
+    __slots__ = ('text', 'source_map', 'dashes', 'line_breaks')
+
+    def __init__(self, text, source_map, dashes, line_breaks):
+        self.text = text
+        self.source_map = source_map
+        self.dashes = dashes
+        self.line_breaks = line_breaks
 
 
 class AlignmentResult:
-    __slots__ = ('html_to_rtml', 'rtml_dashes', 'html_plain_map',
-                 'source_map', 'rtml_text')
+    __slots__ = ('html_to_rtml', 'html_plain', 'html_plain_map')
 
-    def __init__(self):
-        self.html_to_rtml = []
-        self.rtml_dashes = frozenset()
-        self.html_plain_map = []
-        self.source_map = []
-        self.rtml_text = ''
+    def __init__(self, html_to_rtml, html_plain, html_plain_map):
+        self.html_to_rtml = html_to_rtml
+        self.html_plain = html_plain
+        self.html_plain_map = html_plain_map
 
 
 def strip_tags_with_positions(text):
@@ -60,15 +63,25 @@ def clean_html_text(html):
     return ''.join(result), result_map
 
 
-def load_rtml_unified():
+_rtml_cache = None
+
+
+def load_rtml():
     """Load rtml from all .terese files once.
 
-    Returns (rtml_text, source_map) where:
-    - rtml_text: tag-stripped plain text from all pages
-    - source_map: per-character (tiff_filename, top_pixel) for rtml_text
+    Returns an RtmlData with:
+    - text: tag-stripped plain text from all pages
+    - source_map: per-character (tiff_filename, top_pixel)
+    - dashes: frozenset of positions of em-dashes in text
+    - line_breaks: frozenset of positions where original line breaks were
     """
+    global _rtml_cache
+    if _rtml_cache is not None:
+        return _rtml_cache
+
     rtml_text_parts = []
     source_maps = []
+    line_break_sets = []
 
     for path in sorted(glob.glob(os.path.join(os.path.dirname(__file__), "..", "*.terese"))):
         with open(path, encoding="utf-8") as f:
@@ -80,7 +93,6 @@ def load_rtml_unified():
         ):
             tiff_path = page_m.group(1)
             tiff_filename = os.path.basename(tiff_path)
-            rtml_content = page_m.group(2)
             box_section = page_m.group(3)
 
             # Build plain text and source map directly from boxes
@@ -107,39 +119,69 @@ def load_rtml_unified():
                     raw_source.append((tiff_filename, top))
 
             # Process line breaks: dehyphenate, convert single \n to space,
-            # collapse \n\n to single \n
+            # collapse \n\n to single \n.
+            # Track line break positions for later reinsertion.
             plain_chars = []
             page_source = []
+            page_line_breaks = set()
+            pending_line_break = False
             i = 0
             while i < len(raw_chars):
                 if raw_chars[i] == '-' and i + 1 < len(raw_chars) and raw_chars[i + 1] == '\n':
-                    # Remove hyphen + newline (dehyphenate)
+                    # Dehyphenate: skip hyphen + newline, mark pending
+                    pending_line_break = True
                     i += 2
                 elif raw_chars[i] == '\n' and i + 1 < len(raw_chars) and raw_chars[i + 1] == '\n':
-                    # Paragraph break: collapse to single \n
+                    # Paragraph break: collapse to single \n, NOT tracked as line break
                     plain_chars.append('\n')
                     page_source.append(raw_source[i])
+                    pending_line_break = False
                     i += 2
                 elif raw_chars[i] == '\n':
-                    # Single newline: replace with space
+                    # Single newline: replace with space, track as line break
+                    pos = len(plain_chars)
                     plain_chars.append(' ')
                     page_source.append(raw_source[i])
+                    page_line_breaks.add(pos)
+                    pending_line_break = False
                     i += 1
                 else:
-                    plain_chars.append(raw_chars[i])
-                    page_source.append(raw_source[i])
+                    if pending_line_break and raw_chars[i] == ' ':
+                        # Space after dehyphenation: record line break here
+                        pos = len(plain_chars)
+                        plain_chars.append(' ')
+                        page_source.append(raw_source[i])
+                        page_line_breaks.add(pos)
+                        pending_line_break = False
+                    else:
+                        plain_chars.append(raw_chars[i])
+                        page_source.append(raw_source[i])
                     i += 1
 
             rtml_text_parts.append(''.join(plain_chars))
             source_maps.append(page_source)
+            line_break_sets.append(page_line_breaks)
 
-    # Concatenate all pages
+    # Concatenate all pages with correct offsets
     combined_text = ''.join(rtml_text_parts)
     combined_source = []
-    for smap in source_maps:
+    combined_line_breaks = set()
+    offset = 0
+    for text_part, smap, lb_set in zip(rtml_text_parts, source_maps, line_break_sets):
         combined_source.extend(smap)
+        for lb in lb_set:
+            combined_line_breaks.add(offset + lb)
+        offset += len(text_part)
 
-    return combined_text, combined_source
+    dashes = frozenset(i for i, ch in enumerate(combined_text) if ch == '—')
+
+    _rtml_cache = RtmlData(
+        text=combined_text,
+        source_map=combined_source,
+        dashes=dashes,
+        line_breaks=frozenset(combined_line_breaks),
+    )
+    return _rtml_cache
 
 
 def global_align(seq_a, seq_b, anchor_len=20, step=100):
@@ -252,43 +294,19 @@ def global_align(seq_a, seq_b, anchor_len=20, step=100):
     return a_to_b
 
 
-def compute_full_alignment(html):
-    """Compute global alignment between HTML and rtml source.
+def align_html(html, rtml):
+    """Align HTML against pre-loaded rtml data.
 
-    Returns an AlignmentResult with html_to_rtml mapping, rtml_dashes,
-    and norm maps/source_map for orth source attribution.
-    Results are cached to disk as a pickle.
+    Returns an AlignmentResult with html_to_rtml mapping,
+    html_plain text, and html_plain_map.
     """
-    html_hash = hashlib.sha256(html.encode()).hexdigest()
-
-    try:
-        with open(_ALIGNMENT_CACHE, 'rb') as f:
-            cache = pickle.load(f)
-        if cache.get('html_hash') == html_hash:
-            return cache['result']
-    except (FileNotFoundError, pickle.UnpicklingError, KeyError, EOFError):
-        pass
-
-    rtml_text, source_map = load_rtml_unified()
-
-    result = AlignmentResult()
-    result.source_map = source_map
-    result.rtml_text = rtml_text
-
-    # Compute rtml dash positions directly in box text
-    rtml_dashes = frozenset(i for i, ch in enumerate(rtml_text) if ch == '—')
-    result.rtml_dashes = rtml_dashes
-
-    # Clean HTML: strip tags, collapse whitespace
     html_plain, html_plain_map = clean_html_text(html)
-    result.html_plain_map = html_plain_map
 
-    # Global alignment directly between cleaned texts
-    print(f"  Aligning {len(html_plain)} html chars with {len(rtml_text)} rtml chars...")
-    html_to_rtml = global_align(html_plain, rtml_text)
-    result.html_to_rtml = html_to_rtml
+    print(f"  Aligning {len(html_plain)} html chars with {len(rtml.text)} rtml chars...")
+    html_to_rtml = global_align(html_plain, rtml.text)
 
-    with open(_ALIGNMENT_CACHE, 'wb') as f:
-        pickle.dump({'html_hash': html_hash, 'result': result}, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    return result
+    return AlignmentResult(
+        html_to_rtml=html_to_rtml,
+        html_plain=html_plain,
+        html_plain_map=html_plain_map,
+    )

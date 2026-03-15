@@ -98,17 +98,17 @@ def score_paragraph(content, all_headwords):
     return score, headword, features
 
 
-def prune_reference_entries(html):
+def mark_reference_entries(html):
     """Score paragraphs by likelihood of being cross-reference entries.
-    Removes those with score >= 30. Writes analysis to JSON/TXT files."""
+    Marks those with score >= 30 with data-ref attribute. Writes analysis to JSON/TXT files."""
 
     # Split HTML into paragraph and non-paragraph chunks
-    parts = re.split(r'(<p>.*?</p>)', html, flags=re.DOTALL)
+    parts = re.split(r'(<p[^>]*>.*?</p>)', html, flags=re.DOTALL)
 
     # First pass: collect all headwords for duplicate detection
     all_headwords = {}
     for part in parts:
-        m = re.match(r'^<p>(.*)</p>$', part, re.DOTALL)
+        m = re.match(r'^<p[^>]*>(.*)</p>$', part, re.DOTALL)
         if not m:
             continue
         orth_m = re.search(r'<orth[^>]*>(.*?)</orth>', m.group(1))
@@ -117,13 +117,13 @@ def prune_reference_entries(html):
             if hw:
                 all_headwords.setdefault(hw, []).append(True)
 
-    # Second pass: score each paragraph, keep or discard
+    # Second pass: score each paragraph, mark or keep
     output_parts = []
     results = []
-    removed = 0
+    marked = 0
 
     for part in parts:
-        m = re.match(r'^<p>(.*)</p>$', part, re.DOTALL)
+        m = re.match(r'^<p[^>]*>(.*)</p>$', part, re.DOTALL)
         if not m:
             output_parts.append(part)
             continue
@@ -139,21 +139,22 @@ def prune_reference_entries(html):
         })
 
         if score >= 30:
-            removed += 1
+            marked += 1
+            output_parts.append(part.replace('<p>', '<p data-ref>', 1))
+        elif ('<span>se</span>' in content or '...' in content) and \
+             '<ol' not in content and '<b>' not in content and \
+             'Duini' not in content and \
+             'Dīlectus' not in content and \
+             'Mĕro' not in content and \
+             'Trĭnundĭnum' not in content and \
+             'Oenus' not in content and \
+             'Adordior' not in content and \
+             'Patella' not in content and \
+             'Axilla' not in content:
+            marked += 1
+            output_parts.append(part.replace('<p>', '<p data-ref>', 1))
         else:
-            if ('<span>se</span>' in content or '...' in content) and \
-            '<ol' not in content and '<b>' not in content and \
-            'Duini' not in content and \
-            'Dīlectus' not in content and \
-            'Mĕro' not in content and \
-            'Trĭnundĭnum' not in content and \
-            'Oenus' not in content and \
-            'Adordior' not in content and \
-            'Patella' not in content and \
-            'Axilla' not in content:
-                pass
-            else:
-                output_parts.append(part)
+            output_parts.append(part)
 
     results.sort(key=lambda x: (-x['score'], x['headword']))
 

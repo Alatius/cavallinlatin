@@ -1,6 +1,9 @@
 orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
 span { background-color: #ceebfd; }
+p[data-ref] { background-color: #e8e8e8; }
+li[data-img] { cursor: pointer; }
+li[data-img]::marker { color: rgb(222, 150, 248); }
 ol.sense-Roman { list-style-type: upper-roman; }
 ol.sense-Alpha { list-style-type: upper-alpha; }
 ol.sense-decimal { list-style-type: decimal; }

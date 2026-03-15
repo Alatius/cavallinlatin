@@ -142,11 +142,11 @@
   });
 
   document.body.addEventListener('click', function(e) {
-    var orth = e.target.closest('orth[data-img]');
-    if (!orth) return;
+    var el = e.target.closest('orth[data-img], li[data-img]');
+    if (!el) return;
 
-    var img_base = orth.getAttribute('data-img');
-    var y = parseFloat(orth.getAttribute('data-y')) || 0;
+    var img_base = el.getAttribute('data-img');
+    var y = parseFloat(el.getAttribute('data-y')) || 0;
     showImage(img_base, y, true);
   });
 
