@@ -23,6 +23,14 @@ def roman_to_int(s):
     return result
 
 
+# Mixed <b>X</b><u>rest</u> markup: these are proper nouns (normalize to <b>X</b>rest).
+# All others with this pattern are derived forms (normalize to <u>Xrest</u>).
+MIXED_PROPER_IDS = {'Aethiops', 'Aloeus', 'Eburones', 'Gergovia', 'Ocnus', 'Oreas'}
+
+MARKUP_LEVELS = {'plain': 0, 'derived': 1, 'proper': 2, 'major': 3}
+LEVEL_TO_TYPE = {v: k for k, v in MARKUP_LEVELS.items()}
+
+
 def make_entry_id(headword_html):
     """Generate an entry ID from headword HTML: strip tags, remove diacritics,
     remove punctuation."""
@@ -32,6 +40,67 @@ def make_entry_id(headword_html):
     text = ''.join(c for c in text if not unicodedata.category(c).startswith('Mn'))
     text = re.sub(r'[^\w]', '', text)
     return text
+
+
+def normalize_mixed_markup(content):
+    """Normalize <b>X</b><u>rest</u> patterns within <orth> tags.
+
+    Proper nouns (MIXED_PROPER_IDS) become first-letter-bold: <b>X</b>rest
+    All others (In-, Sub-, Super- compounds) become underlined: <u>Xrest</u>
+    """
+    def normalize_match(m):
+        orth_open = m.group(1)
+        bold_text = m.group(2)
+        underline_text = m.group(3)
+        trailing = m.group(4)
+
+        combined_id = make_entry_id(bold_text + underline_text)
+
+        if combined_id in MIXED_PROPER_IDS:
+            return f'{orth_open}<b>{bold_text}</b>{underline_text}{trailing}'
+        else:
+            return f'{orth_open}<u>{bold_text}{underline_text}</u>{trailing}'
+
+    return re.sub(
+        r'(<orth[^>]*>)<b>([^<]+)</b><u>([^<]+)</u>([^<]*)',
+        normalize_match,
+        content
+    )
+
+
+def classify_orth(orth_inner_html):
+    """Classify an orth tag's content by its markup level.
+
+    Returns: 'major', 'proper', 'derived', or 'plain'.
+    """
+    bare = orth_inner_html.strip().lstrip('(')
+
+    if bare.startswith('<b>'):
+        close_b = bare.find('</b>')
+        if close_b < 0:
+            return 'major'
+        after_b = bare[close_b + 4:]
+        after_text = re.sub(r'<[^>]*>', '', after_b)
+        after_letters = sum(1 for c in after_text if c.isalpha())
+        if after_letters >= 2:
+            return 'proper'
+        return 'major'
+    elif bare.startswith('<u>'):
+        return 'derived'
+    return 'plain'
+
+
+def determine_entry_type(content, has_ref):
+    """Determine entry type from the maximum orth markup level."""
+    if has_ref:
+        return 'reference'
+
+    max_level = 0
+    for orth_m in re.finditer(r'<orth[^>]*>(.*?)</orth>', content):
+        level = MARKUP_LEVELS.get(classify_orth(orth_m.group(1)), 0)
+        max_level = max(max_level, level)
+
+    return LEVEL_TO_TYPE.get(max_level, 'plain')
 
 
 def fix_tag_nesting(content):
@@ -113,13 +182,21 @@ def fix_tag_nesting(content):
 def convert_to_xml(html):
     """Convert postprocessed HTML with <p> tags to XML with <entry> elements.
 
+    Entry types (from orth markup, max level across all orths):
+    - major:     fully bold headword — root/core vocabulary
+    - proper:    first-letter-bold headword — proper nouns
+    - derived:   underlined headword — etymological derivatives
+    - reference: cross-reference entry (from data-ref)
+
     Homograph numbering:
-    - Reference entries (data-ref) get no id attribute.
+    - Reference entries get no id attribute.
     - Non-reference entries with explicit homograph numbers (Roman/Arabic prefix
-      before <orth>) get that number as their .N suffix.
+      before <orth>) get that number as their #N suffix.
     - Remaining non-reference duplicates fill in the lowest available numbers
       in dictionary order.
     - Singleton entries (one non-ref, no explicit number) get a bare id.
+
+    Derived entries get a root attribute pointing to the most recent major entry.
     """
 
     # --- Pass 1: collect all entries ---
@@ -137,6 +214,9 @@ def convert_to_xml(html):
         content = fix_tag_nesting(content)
         content = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#)', '&amp;', content)
 
+        # Normalize mixed <b>+<u> markup in orth tags
+        content = normalize_mixed_markup(content)
+
         # Extract explicit homograph number from prefix before <orth>
         explicit_num = None
         orth_pos = content.find('<orth')
@@ -153,6 +233,8 @@ def convert_to_xml(html):
         headword_html = orth_m.group(1) if orth_m else ''
         base_id = make_entry_id(headword_html) or 'unknown'
 
+        entry_type = determine_entry_type(content, has_ref)
+
         entries.append({
             'start': m.start(),
             'end': m.end(),
@@ -162,6 +244,8 @@ def convert_to_xml(html):
             'base_id': base_id,
             'explicit_num': explicit_num,
             'entry_id': None,
+            'type': entry_type,
+            'root': None,
         })
 
     # --- Group non-ref entries by base_id ---
@@ -215,7 +299,16 @@ def convert_to_xml(html):
                       f"reassigned to '{entry['entry_id']}'")
             seen_ids.add(entry['entry_id'])
 
+    # --- Assign root for derived/plain entries ---
+    last_root_id = None
+    for entry in entries:
+        if entry['type'] in ('major', 'proper'):
+            last_root_id = entry['entry_id']
+        elif entry['type'] in ('derived', 'plain') and last_root_id is not None:
+            entry['root'] = last_root_id
+
     # --- Pass 2: build output ---
+    type_counts = defaultdict(int)
     result_parts = []
     last_end = 0
     entry_count = 0
@@ -226,16 +319,20 @@ def convert_to_xml(html):
         attrs = ''
         if entry['entry_id'] is not None:
             attrs += f' id="{entry["entry_id"]}"'
-        if entry['has_ref']:
-            attrs += ' data-ref=""'
+        attrs += f' type="{entry["type"]}"'
+        if entry['root'] is not None:
+            attrs += f' root="{entry["root"]}"'
         if entry['has_review']:
             attrs += ' data-review=""'
 
         result_parts.append(f'<entry{attrs}>{entry["content"]}</entry>')
         entry_count += 1
+        type_counts[entry['type']] += 1
         last_end = entry['end']
 
     result_parts.append(html[last_end:])
+
+    print(f"  Entry types: {dict(type_counts)}")
 
     return ''.join(result_parts), entry_count
 
