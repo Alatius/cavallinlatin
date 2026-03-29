@@ -49,6 +49,8 @@ def postprocess(html):
     html = html.replace('C<i>', '<i>C')
     html = html.replace('<i>:</i>', ':')
     html = html.replace('<i>;</i>', ';')
+    html = re.sub('</b>([, -]*)<b>', r'\1', html)
+    html = html.replace('-<b>', '<b>-').replace('</b>-', '-</b>')
     html = re.sub(',([a-z])', r', \1', html)
     html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
 
