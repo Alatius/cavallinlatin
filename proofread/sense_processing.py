@@ -35,32 +35,80 @@ def get_marker_type_and_value(marker):
         return ('unknown', 0)
 
 
-def _marker_level(mtype):
-    """Return the nesting level for a marker type."""
-    level_map = {
-        'letter_upper': 0,
-        'roman_upper': 1,
-        'digit': 2,
-        'letter': 3,
-        'greek': 4,
-        'roman_lower': 5,
-        'double_letter': 6,
-    }
-    return level_map.get(mtype)
+_CSS_CLASS = {
+    'letter_upper': 'sense-Alpha',
+    'roman_upper': 'sense-Roman',
+    'digit': 'sense-decimal',
+    'letter': 'sense-alpha',
+    'greek': 'sense-greek',
+    'roman_lower': 'sense-roman',
+    'double_letter': 'sense-double-alpha',
+}
 
 
-def _css_class(mtype):
-    """Return a CSS class for the list style matching the marker type."""
-    class_map = {
-        'letter_upper': 'sense-Alpha',
-        'roman_upper': 'sense-Roman',
-        'digit': 'sense-decimal',
-        'letter': 'sense-alpha',
-        'greek': 'sense-greek',
-        'roman_lower': 'sense-roman',
-        'double_letter': 'sense-double-alpha',
-    }
-    return class_map.get(mtype, 'sense')
+def _dynamic_stack_analyze(marker_types_vals):
+    """Analyze markers using dynamic nesting based on order of appearance.
+
+    Determines nesting dynamically rather than using a fixed level hierarchy:
+    - A marker type already on the stack: pop back to it and continue
+    - A new marker type with a starting value: push as a new nested level
+
+    This correctly handles both the standard hierarchy (A > I > 1 > a) and
+    entries like Prīmus where digits (1-6) are the outer level with
+    letter_upper (A-C) nested inside.
+
+    Args:
+        marker_types_vals: list of (mtype, mval) tuples
+
+    Returns:
+        (is_valid, levels): is_valid is bool, levels is list of int levels
+        (may be shorter than input if validation fails early)
+    """
+    stack = []  # list of [mtype, mval, level]
+    levels = []
+
+    for mtype, mval in marker_types_vals:
+        if mtype == 'unknown':
+            levels.append(None)
+            continue
+
+        # Look for this marker type on the stack (search from top)
+        found_idx = None
+        for i in range(len(stack) - 1, -1, -1):
+            if stack[i][0] == mtype:
+                found_idx = i
+                break
+
+        if found_idx is not None:
+            # Existing type: pop everything above it
+            del stack[found_idx + 1:]
+            # Check that value is sequential
+            if mval != stack[found_idx][1] + 1:
+                return False, levels
+            stack[found_idx][1] = mval
+            levels.append(stack[found_idx][2])
+        else:
+            # New type: must start at its beginning value
+            if mtype in ('letter', 'letter_upper', 'double_letter', 'greek'):
+                if mval != 0:
+                    return False, levels
+            elif mtype in ('digit', 'roman_lower', 'roman_upper'):
+                if mval != 1:
+                    return False, levels
+            # Assign next deeper level
+            new_level = (stack[-1][2] + 1) if stack else 0
+            stack.append([mtype, mval, new_level])
+            levels.append(new_level)
+
+    return True, levels
+
+
+def _is_sequence_valid(markers):
+    """Check if a marker sequence forms a valid nesting structure."""
+    if not markers:
+        return True
+    mtv = [(mtype, mval) for _, mtype, mval, _ in markers]
+    return _dynamic_stack_analyze(mtv)[0]
 
 
 def split_paragraphs_at_orths(html):
@@ -77,48 +125,15 @@ def split_paragraphs_at_orths(html):
     """
 
     SENSE_RE = re.compile(
-        r'^\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<)'
+        r'^\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<|$)'
     )
     ORTH_INITIAL_RE = re.compile(r'^<orth[^>]*>')
     ORTH_ANY_RE = re.compile(r'<orth[^>]*>')
 
-    def is_sequence_valid(markers_to_check):
-        """Check if a sequence of markers is valid using stack-based nesting."""
-        if len(markers_to_check) < 1:
-            return True
-
-        stack = []
-
-        for marker, mtype, mval, punct in markers_to_check:
-            if mtype == 'unknown':
-                continue
-            level = _marker_level(mtype)
-            if level is None:
-                continue
-
-            while stack and stack[-1][0] > level:
-                stack.pop()
-
-            if stack and stack[-1][0] == level:
-                prev_val = stack[-1][1]
-                if mval != prev_val + 1:
-                    return False
-                stack[-1] = (level, mval)
-            else:
-                if mtype in ('letter', 'letter_upper', 'double_letter', 'greek'):
-                    if mval != 0:
-                        return False
-                elif mtype in ('digit', 'roman_lower', 'roman_upper'):
-                    if mval != 1:
-                        return False
-                stack.append((level, mval))
-
-        return True
-
     def try_partition_combination(markers, active_resets, marker_line_indices):
         """Try a specific combination of reset line indices and check if all partitions are valid."""
         if not active_resets:
-            return is_sequence_valid(markers)
+            return _is_sequence_valid(markers)
 
         current_partition = []
         for i, (li, marker_info) in enumerate(zip(marker_line_indices, markers)):
@@ -130,13 +145,13 @@ def split_paragraphs_at_orths(html):
                         break
 
             if should_reset and current_partition:
-                if not is_sequence_valid(current_partition):
+                if not _is_sequence_valid(current_partition):
                     return False
                 current_partition = [marker_info]
             else:
                 current_partition.append(marker_info)
 
-        if current_partition and not is_sequence_valid(current_partition):
+        if current_partition and not _is_sequence_valid(current_partition):
             return False
 
         return True
@@ -206,7 +221,7 @@ def split_paragraphs_at_orths(html):
             # No line-initial orths to split at. If the sense marker sequence
             # is broken, try inline orths as emergency split points; otherwise
             # return the paragraph unchanged.
-            if len(markers) >= 2 and not is_sequence_valid(markers):
+            if len(markers) >= 2 and not _is_sequence_valid(markers):
                 for li in inline_orth_lines:
                     if try_partition_combination(markers, [li], marker_line_indices):
                         line_tags[li] = 'split'
@@ -256,7 +271,6 @@ def split_paragraphs_at_orths(html):
                     valid_perms.append((set(active_line), set(active_inline)))
 
             if not valid_perms:
-                # No combination of splits keeps all marker sequences valid.
                 return '<p>!!!' + para_content + '</p>'
 
             # A line becomes a split if it appears in *any* valid combination.
@@ -284,7 +298,7 @@ def split_paragraphs_at_orths(html):
 def convert_senses_to_lists(html):
     """Convert sense markers (I., 1., a., α., aa.) into nested <ol>/<li> HTML lists."""
 
-    sense_pattern = r'(?:<br/>\n?)\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<)'
+    sense_pattern = r'(?:<br/>\n?)\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<|$)'
 
     def process_paragraph(match):
         full_para = match.group(0)
@@ -301,17 +315,27 @@ def convert_senses_to_lists(html):
         content_after_hw = para_content[first_br:]
 
         # Find all sense markers after the headword
-        markers = []
+        raw_markers = []
         for m in re.finditer(sense_pattern, content_after_hw):
             marker_text = m.group(1)
             mtype, mval = get_marker_type_and_value(marker_text)
-            level = _marker_level(mtype)
-            if level is None:
+            if mtype == 'unknown':
                 continue
             # abs_start: where <br/> begins; abs_marker_start: where marker text begins
             abs_start = first_br + m.start()
             abs_marker_start = first_br + m.start(1)
-            markers.append((abs_start, abs_marker_start, level, mtype))
+            raw_markers.append((abs_start, abs_marker_start, mtype, mval))
+
+        if not raw_markers:
+            return full_para
+
+        # Compute nesting levels dynamically based on marker order
+        mtv = [(mtype, mval) for _, _, mtype, mval in raw_markers]
+        _, dyn_levels = _dynamic_stack_analyze(mtv)
+
+        markers = [(s, ms, lv, mt)
+                   for (s, ms, mt, _), lv in zip(raw_markers, dyn_levels)
+                   if lv is not None]
 
         if not markers:
             return full_para
@@ -349,7 +373,7 @@ def convert_senses_to_lists(html):
                     output.append('</li> <li>')
                 else:
                     # New nested level
-                    css_class = _css_class(mtype)
+                    css_class = _CSS_CLASS.get(mtype, 'sense')
                     output.append(f' <ol class="{css_class}"><li>')
                     stack.append(level)
 
