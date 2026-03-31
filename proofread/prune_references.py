@@ -1,5 +1,5 @@
 import re
-import json
+
 
 
 def strip_html(text):
@@ -155,15 +155,5 @@ def mark_reference_entries(html):
             output_parts.append(part.replace('<p>', '<p data-ref>', 1))
         else:
             output_parts.append(part)
-
-    results.sort(key=lambda x: (-x['score'], x['headword']))
-
-    with open('reference_candidates.json', 'w') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-
-    with open('reference_candidates.txt', 'w') as f:
-        for r in results:
-            preview = strip_html(r['paragraph_preview'])[:80]
-            f.write(f"{r['score']:4d}  {r['headword']:30s}  {preview}\n")
 
     return ''.join(output_parts)

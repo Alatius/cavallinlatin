@@ -39,3 +39,5 @@ terese/src/unigram.o
 terese/stamp-h1
 proofread/columns/*.png
 proofread/.alignment_cache.pkl
+.claude/
+.DS_Store

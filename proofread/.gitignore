@@ -1,2 +1,10 @@
 *.docx
-env
+env/
+__pycache__/
+.claude/
+.idea/
+.DS_Store
+.alignment_cache.pkl
+.~lock.*.fodt#
+cavallinlatin.html
+cavallinlatin.xml

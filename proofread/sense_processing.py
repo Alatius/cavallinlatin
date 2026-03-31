@@ -173,6 +173,10 @@ def split_paragraphs_at_orths(html):
         full_para = match.group(0)
         para_content = match.group(1)
 
+        # Skip !!!-marked paragraphs (already flagged in a previous pass)
+        if para_content.startswith('!!!'):
+            return full_para
+
         # Each fodt <p> may contain multiple dictionary entries separated by
         # <br/>\n. Split into individual lines to analyse them.
         lines = para_content.split('<br/>\n')

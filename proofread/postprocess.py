@@ -4,6 +4,7 @@ import unicodedata
 from text_alignment import load_rtml, align_html
 from spurious_breaks import remove_spurious_breaks
 from sense_processing import split_paragraphs_at_orths, convert_senses_to_lists
+from apply_sense_patches import apply_all_fixes
 from source_attrs import compute_element_sources, apply_source_attrs, insert_original_linebreaks
 from prune_references import mark_reference_entries
 
@@ -134,6 +135,8 @@ def postprocess(html):
     html = remove_spurious_breaks(html, alignment1, rtml)
 
     # === Phase 3: Structural transforms (no alignment needed) ===
+    html = split_paragraphs_at_orths(html)
+    html = apply_all_fixes(html)
     html = split_paragraphs_at_orths(html)
     html = convert_senses_to_lists(html)
     html = mark_reference_entries(html)
