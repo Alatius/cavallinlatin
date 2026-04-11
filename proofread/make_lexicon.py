@@ -33,13 +33,13 @@ LEVEL_TO_TYPE = {v: k for k, v in MARKUP_LEVELS.items()}
 
 def make_entry_id(headword_html):
     """Generate an entry ID from headword HTML: strip tags, remove diacritics,
-    remove punctuation."""
+    remove punctuation, lowercase."""
     text = re.sub(r'<[^>]*>', '', headword_html)
     text = text.replace('æ', 'ae').replace('œ', 'oe').replace('Æ', 'Ae').replace('Œ', 'Oe')
     text = unicodedata.normalize('NFKD', text)
     text = ''.join(c for c in text if not unicodedata.category(c).startswith('Mn'))
     text = re.sub(r'[^\w]', '', text)
-    return text
+    return text.lower()
 
 
 def normalize_mixed_markup(content):
@@ -349,3 +349,13 @@ with open('cavallinlatin.xml', 'w', encoding='utf-8') as f:
     f.write('\n</dictionary>\n')
 
 print(f"  Wrote {entry_count} entries to cavallinlatin.xml")
+
+# Validate final XML and check ID uniqueness
+from xml.etree.ElementTree import parse as _parse_xml
+_tree = _parse_xml('cavallinlatin.xml')
+_ids = [e.get('id') for e in _tree.iter('entry') if e.get('id') is not None]
+_dupes = [i for i in set(_ids) if _ids.count(i) > 1]
+if _dupes:
+    print(f"  ERROR: duplicate IDs: {_dupes}")
+else:
+    print(f"  XML well-formed; {len(_ids)} unique IDs")
