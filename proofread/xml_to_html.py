@@ -17,6 +17,20 @@ def xml_to_html(xml_path='cavallinlatin.xml', html_path='cavallinlatin.html'):
     body = re.sub(r'<entry([^>]*)>', r'<p\1>', body)
     body = body.replace('</entry>', '</p>')
 
+    # Convert <sense n="X" ...> to <div class="sense" ...><span class="sense-num">X.</span>
+    def _sense_to_div(m):
+        attrs = m.group(1)
+        n_match = re.search(r'n="([^"]*)"', attrs)
+        n_val = n_match.group(1) if n_match else ''
+        rest = re.sub(r'\s*n="[^"]*"', '', attrs)
+        return f'<div class="sense"{rest}><span class="sense-num">{n_val}.</span> '
+
+    body = re.sub(r'<sense\b([^>]*)>', _sense_to_div, body)
+    body = body.replace('</sense>', '</div>')
+
+    # Convert XML y= attribute to HTML data-y=
+    body = body.replace(' y="', ' data-y="')
+
     # Unescape &amp; back to & (HTML handles bare & in text fine)
     body = body.replace('&amp;', '&')
 

@@ -3,15 +3,9 @@ orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
 span { background-color: #ceebfd; }
 p[type="reference"] { background-color: #e8e8e8; }
-li[data-img] { cursor: pointer; }
-li[data-img]::marker { color: rgb(222, 150, 248); }
-ol.sense-Roman { list-style-type: upper-roman; }
-ol.sense-Alpha { list-style-type: upper-alpha; }
-ol.sense-decimal { list-style-type: decimal; }
-ol.sense-alpha { list-style-type: lower-alpha; }
-ol.sense-greek { list-style-type: lower-greek; }
-ol.sense-roman { list-style-type: lower-roman; }
-ol.sense-double-alpha { list-style-type: lower-alpha; }
+.sense { margin-left: 1.5em; }
+.sense[data-y] { cursor: pointer; }
+.sense-num { color: rgb(222, 150, 248); }
 body {
   margin: 0;
   display: flex;

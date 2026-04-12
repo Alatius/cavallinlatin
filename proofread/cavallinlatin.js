@@ -156,7 +156,7 @@
   }
 
   document.body.addEventListener('click', function(e) {
-    var el = e.target.closest('orth[data-y], li[data-y]');
+    var el = e.target.closest('orth[data-y], .sense[data-y]');
     if (!el) return;
 
     var y = parseFloat(el.getAttribute('data-y')) || 0;

@@ -3,7 +3,7 @@ import unicodedata
 
 from text_alignment import load_rtml, align_html
 from spurious_breaks import remove_spurious_breaks
-from sense_processing import split_paragraphs_at_orths, convert_senses_to_lists
+from sense_processing import split_paragraphs_at_orths, convert_senses_to_elements
 from apply_sense_patches import apply_all_fixes
 from source_attrs import (
     compute_element_sources, apply_source_attrs,
@@ -141,15 +141,15 @@ def postprocess(html):
     html = split_paragraphs_at_orths(html)
     html = apply_all_fixes(html)
     html = split_paragraphs_at_orths(html)
-    html = convert_senses_to_lists(html)
+    html = convert_senses_to_elements(html)
     html = mark_reference_entries(html)
 
     # === Phase 4: Second alignment (source attrs + line breaks) ===
     alignment2 = align_html(html, rtml)
-    orth_attrs, li_attrs = compute_element_sources(html, alignment2, rtml)
+    orth_attrs, sense_attrs = compute_element_sources(html, alignment2, rtml)
     html = insert_original_linebreaks(html, alignment2, rtml)
     html = insert_column_breaks(html, alignment2, rtml)
     html = cleanup_linebreaks(html)
-    html = apply_source_attrs(html, orth_attrs, li_attrs)
+    html = apply_source_attrs(html, orth_attrs, sense_attrs)
 
     return html

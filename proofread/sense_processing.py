@@ -35,17 +35,6 @@ def get_marker_type_and_value(marker):
         return ('unknown', 0)
 
 
-_CSS_CLASS = {
-    'letter_upper': 'sense-Alpha',
-    'roman_upper': 'sense-Roman',
-    'digit': 'sense-decimal',
-    'letter': 'sense-alpha',
-    'greek': 'sense-greek',
-    'roman_lower': 'sense-roman',
-    'double_letter': 'sense-double-alpha',
-}
-
-
 def _dynamic_stack_analyze(marker_types_vals):
     """Analyze markers using dynamic nesting based on order of appearance.
 
@@ -299,8 +288,8 @@ def split_paragraphs_at_orths(html):
     return html
 
 
-def convert_senses_to_lists(html):
-    """Convert sense markers (I., 1., a., α., aa.) into nested <ol>/<li> HTML lists."""
+def convert_senses_to_elements(html):
+    """Convert sense markers (I., 1., a., α., aa.) into nested <sense> elements."""
 
     sense_pattern = r'(?:<br/>\n?)\s*([0-9]+|[a-z]{1,2}|[A-Z]|[IVXivx]+|[α-ω])([.,;])?(?=\s|<|$)'
 
@@ -325,41 +314,38 @@ def convert_senses_to_lists(html):
             mtype, mval = get_marker_type_and_value(marker_text)
             if mtype == 'unknown':
                 continue
-            # abs_start: where <br/> begins; abs_marker_start: where marker text begins
             abs_start = first_br + m.start()
-            abs_marker_start = first_br + m.start(1)
-            raw_markers.append((abs_start, abs_marker_start, mtype, mval))
+            abs_end = first_br + m.end()
+            raw_markers.append((abs_start, abs_end, mtype, mval, marker_text))
 
         if not raw_markers:
             return full_para
 
         # Compute nesting levels dynamically based on marker order
-        mtv = [(mtype, mval) for _, _, mtype, mval in raw_markers]
+        mtv = [(mtype, mval) for _, _, mtype, mval, _ in raw_markers]
         _, dyn_levels = _dynamic_stack_analyze(mtv)
 
-        markers = [(s, ms, lv, mt)
-                   for (s, ms, mt, _), lv in zip(raw_markers, dyn_levels)
+        markers = [(s, end, lv, txt)
+                   for (s, end, _, _, txt), lv in zip(raw_markers, dyn_levels)
                    if lv is not None]
 
         if not markers:
             return full_para
 
-        # Build output: preamble + list structure
-        # Split at each <br/> before a marker, keeping the marker text
         parts = []
         prev_end = 0
-        for abs_start, abs_marker_start, level, mtype in markers:
-            # Text before this <br/>
+        for abs_start, abs_end, level, marker_text in markers:
             preamble = para_content[prev_end:abs_start]
             parts.append(('text', preamble))
-            parts.append(('marker', level, mtype))
-            # Continue from the marker text (preserving it in output)
-            prev_end = abs_marker_start
+            ws_end = abs_end
+            while ws_end < len(para_content) and para_content[ws_end] == ' ':
+                ws_end += 1
+            leading_ws = para_content[abs_end:ws_end]
+            parts.append(('marker', level, marker_text, leading_ws))
+            prev_end = ws_end
 
-        # Remaining content after last marker
         trailing = para_content[prev_end:]
 
-        # Now build the output with a stack
         stack = []
         output = []
 
@@ -367,26 +353,20 @@ def convert_senses_to_lists(html):
             if part[0] == 'text':
                 output.append(part[1])
             else:
-                _, level, mtype = part
-                # Close deeper levels
+                _, level, marker_text, leading_ws = part
                 while stack and stack[-1] > level:
-                    output.append('</li></ol>')
+                    output.append('</sense>')
                     stack.pop()
-                # Sibling
                 if stack and stack[-1] == level:
-                    output.append('</li> <li>')
+                    output.append(f'</sense>{leading_ws}<sense n="{marker_text}">')
                 else:
-                    # New nested level
-                    css_class = _CSS_CLASS.get(mtype, 'sense')
-                    output.append(f' <ol class="{css_class}"><li>')
+                    output.append(f'{leading_ws}<sense n="{marker_text}">')
                     stack.append(level)
 
-        # Append trailing content
         output.append(trailing)
 
-        # Close remaining stack
         while stack:
-            output.append('</li></ol>')
+            output.append('</sense>')
             stack.pop()
 
         return '<p>' + ''.join(output) + '</p>'

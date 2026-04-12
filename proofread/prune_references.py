@@ -19,7 +19,7 @@ def score_paragraph(content, all_headwords):
     # Features
     has_se_span = bool(re.search(r'<span>se</span>', content))
     has_bare_se = bool(re.search(r'</orth>\s*se\s+[A-Z]', content))
-    has_ol = '<ol' in content
+    has_sense = '<sense' in content
     orth_count = len(re.findall(r'<orth', content))
 
     span_contents = re.findall(r'<span>(.*?)</span>', content)
@@ -67,7 +67,7 @@ def score_paragraph(content, all_headwords):
     if not has_bold_orth and not has_underline_orth:
         score += 5
 
-    if has_ol:
+    if has_sense:
         score -= 30
     if has_underline_orth:
         score -= 20
@@ -81,7 +81,7 @@ def score_paragraph(content, all_headwords):
     features = {
         'has_se_span': has_se_span,
         'has_bare_se': has_bare_se,
-        'has_ol': has_ol,
+        'has_sense': has_sense,
         'span_count': span_count,
         'only_se_spans': only_se_spans,
         'text_length': text_length,
@@ -142,7 +142,7 @@ def mark_reference_entries(html):
             marked += 1
             output_parts.append(part.replace('<p>', '<p data-ref>', 1))
         elif ('<span>se</span>' in content or '...' in content) and \
-             '<ol' not in content and '<b>' not in content and \
+             '<sense' not in content and '<b>' not in content and \
              'Duini' not in content and \
              'Dīlectus' not in content and \
              'Mĕro' not in content and \

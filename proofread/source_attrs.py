@@ -65,21 +65,19 @@ def compute_element_sources(html, alignment, rtml):
         if last_attribution is not None:
             orth_attrs[orth_idx] = last_attribution
 
-    # Compute li sources
-    li_attrs = {}
-    for li_idx, m in enumerate(re.finditer(r'<li>', html)):
+    sense_attrs = {}
+    for sense_idx, m in enumerate(re.finditer(r'<sense\b[^>]*>', html)):
         content_start = m.end()
-        # Use a short range after <li> for the sense marker
         content_end = min(content_start + 10, len(html))
         found = _find_source(content_start, content_end)
         if found is not None:
-            li_attrs[li_idx] = found
+            sense_attrs[sense_idx] = found
 
-    return orth_attrs, li_attrs
+    return orth_attrs, sense_attrs
 
 
-def apply_source_attrs(html, orth_attrs, li_attrs):
-    """Replace <orth> and <li> tags with attributed versions (by ordinal index)."""
+def apply_source_attrs(html, orth_attrs, sense_attrs):
+    """Replace <orth> and <sense> tags with attributed versions (by ordinal index)."""
     total_orth = 0
     attributed_orth = 0
 
@@ -90,7 +88,7 @@ def apply_source_attrs(html, orth_attrs, li_attrs):
         if idx in orth_attrs:
             attributed_orth += 1
             _, y = orth_attrs[idx]
-            return f'<orth data-y="{y}">'
+            return f'<orth y="{y}">'
         return '<orth>'
 
     html = re.sub(r'<orth>', replace_orth, html)
@@ -98,23 +96,24 @@ def apply_source_attrs(html, orth_attrs, li_attrs):
     if total_orth > 0 and attributed_orth < total_orth:
         print(f"  Warning: {total_orth - attributed_orth} orths could not be attributed")
 
-    total_li = 0
-    attributed_li = 0
+    total_sense = 0
+    attributed_sense = 0
 
-    def replace_li(m):
-        nonlocal total_li, attributed_li
-        idx = total_li
-        total_li += 1
-        if idx in li_attrs:
-            attributed_li += 1
-            _, y = li_attrs[idx]
-            return f'<li data-y="{y}">'
-        return '<li>'
+    def replace_sense(m):
+        nonlocal total_sense, attributed_sense
+        idx = total_sense
+        total_sense += 1
+        attrs = m.group(1)
+        if idx in sense_attrs:
+            attributed_sense += 1
+            _, y = sense_attrs[idx]
+            return f'<sense{attrs} y="{y}">'
+        return m.group(0)
 
-    html = re.sub(r'<li>', replace_li, html)
+    html = re.sub(r'<sense\b([^>]*)>', replace_sense, html)
 
-    if total_li > 0 and attributed_li < total_li:
-        print(f"  Warning: {total_li - attributed_li} list items could not be attributed")
+    if total_sense > 0 and attributed_sense < total_sense:
+        print(f"  Warning: {total_sense - attributed_sense} sense elements could not be attributed")
 
     return html
 

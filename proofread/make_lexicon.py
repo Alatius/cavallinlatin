@@ -104,14 +104,13 @@ def determine_entry_type(content, has_ref):
 
 
 def fix_tag_nesting(content):
-    """Fix inline tags (span, b, i, u) that cross structural boundaries (ol, li).
+    """Fix inline tags (span, b, i, u) that cross <sense> boundaries.
 
-    Closes open inline tags before structural tags and reopens them inside
-    text-containing structural elements, producing valid XML nesting.
+    Closes open inline tags before <sense>/</sense> and reopens them inside,
+    producing valid XML nesting.
     """
     INLINE_TAGS = {'span', 'b', 'i', 'u'}
 
-    # Tokenize into tags and text segments
     tokens = []
     pos = 0
     for m in re.finditer(r'<[^>]+>', content):
@@ -141,34 +140,29 @@ def fix_tag_nesting(content):
         tag_name = tag_match.group(1)
         is_close = tok_val.startswith('</')
 
-        if tag_name in ('ol', 'li'):
-            # Close all currently emitted inlines
+        if tag_name == 'sense':
             for name, _ in reversed(emitted):
                 output.append(f'</{name}>')
             emitted.clear()
 
             output.append(tok_val)
 
-            # Reopen inlines after <li> (can contain text) or </ol> (back in parent)
-            if (not is_close and tag_name == 'li') or (is_close and tag_name == 'ol'):
-                for item in inline_stack:
-                    output.append(item[1])
-                    emitted.append(item)
+            # Both <sense ...> and </sense> return to a text context
+            for item in inline_stack:
+                output.append(item[1])
+                emitted.append(item)
 
         elif tag_name in INLINE_TAGS:
             if is_close:
-                # Remove from logical stack
                 for j in range(len(inline_stack) - 1, -1, -1):
                     if inline_stack[j][0] == tag_name:
                         inline_stack.pop(j)
                         break
-                # Remove from emitted and output close tag
                 for j in range(len(emitted) - 1, -1, -1):
                     if emitted[j][0] == tag_name:
                         emitted.pop(j)
                         output.append(tok_val)
                         break
-                # If not in emitted, tag was already closed at structural boundary
             else:
                 inline_stack.append((tag_name, tok_val))
                 emitted.append((tag_name, tok_val))
