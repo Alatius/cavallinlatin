@@ -20,6 +20,9 @@ def xml_to_html(xml_path='cavallinlatin.xml', html_path='cavallinlatin.html'):
     # Unescape &amp; back to & (HTML handles bare & in text fine)
     body = body.replace('&amp;', '&')
 
+    # HTML5 ignores /> on custom elements; give <cb/> an explicit close
+    body = re.sub(r'<cb([^/>]*)/>', r'<cb\1></cb>', body)
+
     entry_count = body.count('<p')
 
     with open(html_path, 'w', encoding='utf-8') as f:

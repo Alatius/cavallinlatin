@@ -141,12 +141,28 @@
     }
   });
 
+  function findPrecedingCb(el) {
+    var cbs = document.getElementsByTagName('cb');
+    var result = null;
+    for (var i = 0; i < cbs.length; i++) {
+      var rel = cbs[i].compareDocumentPosition(el);
+      if (rel & Node.DOCUMENT_POSITION_FOLLOWING) {
+        result = cbs[i];
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
   document.body.addEventListener('click', function(e) {
-    var el = e.target.closest('orth[data-img], li[data-img]');
+    var el = e.target.closest('orth[data-y], li[data-y]');
     if (!el) return;
 
-    var img_base = el.getAttribute('data-img');
     var y = parseFloat(el.getAttribute('data-y')) || 0;
+    var cb = findPrecedingCb(el);
+    if (!cb) return;
+    var img_base = 'cavlat-' + cb.getAttribute('n') + '.png';
     showImage(img_base, y, true);
   });
 

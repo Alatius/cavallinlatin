@@ -1,3 +1,4 @@
+cb { display: none; }
 orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
 span { background-color: #ceebfd; }

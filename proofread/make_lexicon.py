@@ -334,7 +334,15 @@ def convert_to_xml(html):
 
     print(f"  Entry types: {dict(type_counts)}")
 
-    return ''.join(result_parts), entry_count
+    xml = ''.join(result_parts)
+
+    # Normalize <cb/> at entry boundaries: move them between entries
+    xml = re.sub(r'(<cb n="[^"]*"/>)\s*(</entry>)', r'\2\n\1', xml)
+    xml = re.sub(
+        r'(<entry[^>]*>)((?:<[^/>][^>]*(?<!/)>)*)(<cb n="[^"]*"/>)',
+        r'\3\n\1\2', xml)
+
+    return xml, entry_count
 
 
 html = convert_fodt_files()

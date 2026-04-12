@@ -4,6 +4,16 @@ import re
 
 TIFF_HEIGHT = 5120
 
+_COL_RE = re.compile(r'cavlat-(\d+-\d+)\.tiff$')
+
+
+def _short_col_name(tiff_path):
+    m = _COL_RE.search(os.path.basename(tiff_path))
+    if m:
+        return m.group(1)
+    print(f"  WARNING: unexpected tiff filename: {tiff_path}")
+    return os.path.basename(tiff_path).replace('.tiff', '')
+
 
 def compute_element_sources(html, alignment, rtml):
     """Compute source attribution for <orth> and <li> tags.
@@ -79,9 +89,8 @@ def apply_source_attrs(html, orth_attrs, li_attrs):
         total_orth += 1
         if idx in orth_attrs:
             attributed_orth += 1
-            tiff, y = orth_attrs[idx]
-            base_name = os.path.basename(tiff).replace('.tiff', '.png')
-            return f'<orth data-img="{base_name}" data-y="{y}">'
+            _, y = orth_attrs[idx]
+            return f'<orth data-y="{y}">'
         return '<orth>'
 
     html = re.sub(r'<orth>', replace_orth, html)
@@ -98,9 +107,8 @@ def apply_source_attrs(html, orth_attrs, li_attrs):
         total_li += 1
         if idx in li_attrs:
             attributed_li += 1
-            tiff, y = li_attrs[idx]
-            base_name = os.path.basename(tiff).replace('.tiff', '.png')
-            return f'<li data-img="{base_name}" data-y="{y}">'
+            _, y = li_attrs[idx]
+            return f'<li data-y="{y}">'
         return '<li>'
 
     html = re.sub(r'<li>', replace_li, html)
@@ -112,7 +120,12 @@ def apply_source_attrs(html, orth_attrs, li_attrs):
 
 
 def insert_original_linebreaks(html, alignment, rtml):
-    """Replace spaces in HTML with \\n where the original print had line breaks."""
+    """Replace spaces in HTML with \\n where the original print had line breaks.
+
+    Length-preserving in-place replacement. Call cleanup_linebreaks afterwards
+    (possibly after other alignment-based modifications) to finalize the
+    whitespace around the inserted newlines.
+    """
     html_plain = alignment.html_plain
     html_to_rtml = alignment.html_to_rtml
     html_plain_map = alignment.html_plain_map
@@ -131,18 +144,63 @@ def insert_original_linebreaks(html, alignment, rtml):
         if abs_pos < len(html) and html[abs_pos] == ' ':
             positions_to_replace.append(abs_pos)
 
-    # Apply from end to preserve positions
     html_chars = list(html)
     for pos in sorted(positions_to_replace, reverse=True):
         html_chars[pos] = '\n'
-    html = ''.join(html_chars)
+    return ''.join(html_chars)
 
-    # Shift \n to be adjacent to tag boundaries:
-    # Move \n past immediately following closing tags
+
+def cleanup_linebreaks(html):
+    """Regex post-processing for \\n and <cb/>: shift adjacent to tag
+    boundaries, collapse surrounding spaces, and move mid-word <cb/> tags
+    past the word boundary. Must only be called AFTER any other
+    alignment-position-dependent modifications have been applied to the HTML,
+    because these regexes may shift and shorten the string."""
     html = re.sub(r'\n((?:</[^>]+>)+)', lambda m: m.group(1) + '\n', html)
-    # Remove spaces between \n and next content
     html = re.sub(r'\n +', '\n', html)
-    # Remove spaces before \n
     html = re.sub(r' +\n', '\n', html)
-
+    html = re.sub(r'(\w)(<cb n="[^"]*"/>)(\w[^ \n<]*) ', r'\1\2\3\n', html)
     return html
+
+
+def insert_column_breaks(html, alignment, rtml):
+    """Insert <cb n="..."/> milestone tags at column transitions.
+
+    Uses alignment.html_plain_map, which remains valid only if the HTML has
+    not yet been modified by cleanup_linebreaks. Schedule between
+    insert_original_linebreaks and cleanup_linebreaks.
+    """
+    html_plain = alignment.html_plain
+    html_to_rtml = alignment.html_to_rtml
+    html_plain_map = alignment.html_plain_map
+    source_map = rtml.source_map
+
+    insertions = []
+    current_col = None
+    for i in range(len(html_plain)):
+        rp = html_to_rtml[i]
+        if rp < 0 or rp >= len(source_map):
+            continue
+        tiff, _ = source_map[rp]
+        if tiff is None:
+            continue
+        short = _short_col_name(tiff)
+        if short != current_col:
+            insertions.append((html_plain_map[i], short))
+            current_col = short
+
+    if not insertions:
+        return html
+
+    parts = []
+    prev = 0
+    for pos, short in insertions:
+        parts.append(html[prev:pos])
+        parts.append(f'<cb n="{short}"/>')
+        prev = pos
+    parts.append(html[prev:])
+
+    unique_cols = len(set(s for _, s in insertions))
+    print(f"  Inserted {len(insertions)} column-break markers "
+          f"({unique_cols} unique columns)")
+    return ''.join(parts)
