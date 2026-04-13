@@ -143,13 +143,15 @@
 
   function findPrecedingCb(el) {
     var cbs = document.getElementsByTagName('cb');
-    var result = null;
-    for (var i = 0; i < cbs.length; i++) {
-      var rel = cbs[i].compareDocumentPosition(el);
-      if (rel & Node.DOCUMENT_POSITION_FOLLOWING) {
-        result = cbs[i];
+    if (cbs.length === 0) return null;
+    var lo = 0, hi = cbs.length - 1, result = null;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (cbs[mid].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        result = cbs[mid];
+        lo = mid + 1;
       } else {
-        break;
+        hi = mid - 1;
       }
     }
     return result;

@@ -109,7 +109,7 @@ def fix_tag_nesting(content):
     Closes open inline tags before <sense>/</sense> and reopens them inside,
     producing valid XML nesting.
     """
-    INLINE_TAGS = {'span', 'b', 'i', 'u'}
+    INLINE_TAGS = {'span', 'foreign', 'b', 'i', 'u'}
 
     tokens = []
     pos = 0
@@ -173,6 +173,330 @@ def fix_tag_nesting(content):
     return ''.join(output)
 
 
+def flip_spans_to_foreign(content):
+    """Invert <span> (fraktur/Swedish) markup to <foreign> (antiqua/Latin) markup.
+
+    Removes <span> tags (Swedish becomes the unmarked default) and wraps
+    previously-untagged text in <foreign>. Skips <orth> content (implicitly
+    foreign). Flushes foreign regions at <sense> boundaries.
+    """
+    TAG_RE = re.compile(r'<[^>]+>')
+
+    tokens = []
+    pos = 0
+    for m in TAG_RE.finditer(content):
+        if m.start() > pos:
+            tokens.append(('text', content[pos:m.start()]))
+        tokens.append(('tag', m.group()))
+        pos = m.end()
+    if pos < len(content):
+        tokens.append(('text', content[pos:]))
+
+    in_span = False
+    in_orth = False
+    foreign_buf = []
+    output = []
+
+    def flush_foreign():
+        if not foreign_buf:
+            return
+        combined = ''.join(foreign_buf)
+        foreign_buf.clear()
+        if any(c.isalpha() for c in re.sub(r'<[^>]*>', '', combined)):
+            output.append(f'<foreign>{combined}</foreign>')
+        else:
+            output.append(combined)
+
+    for tok_type, tok_val in tokens:
+        if tok_type == 'text':
+            if in_span:
+                flush_foreign()
+                output.append(tok_val)
+            elif in_orth:
+                output.append(tok_val)
+            else:
+                foreign_buf.append(tok_val)
+            continue
+
+        tag_name_m = re.match(r'^</?(\w+)', tok_val)
+        if not tag_name_m:
+            if in_span or in_orth:
+                output.append(tok_val)
+            else:
+                foreign_buf.append(tok_val)
+            continue
+
+        tag_name = tag_name_m.group(1)
+        is_close = tok_val.startswith('</')
+
+        if tag_name == 'span':
+            if is_close:
+                in_span = False
+            else:
+                flush_foreign()
+                in_span = True
+        elif tag_name == 'orth':
+            if is_close:
+                in_orth = False
+                output.append(tok_val)
+            else:
+                flush_foreign()
+                in_orth = True
+                output.append(tok_val)
+        elif tag_name == 'sense':
+            flush_foreign()
+            output.append(tok_val)
+        elif in_span or in_orth:
+            output.append(tok_val)
+        else:
+            foreign_buf.append(tok_val)
+
+    flush_foreign()
+    return ''.join(output)
+
+
+def _is_foreign_letter(c):
+    return c.isalpha() and c != 'ɔ'
+
+
+def _has_foreign_letters(text):
+    return any(_is_foreign_letter(c) for c in re.sub(r'<[^>]*>', '', text))
+
+
+def _next_text_is_letter(s, pos):
+    """Check if the next non-tag character at or after pos is a foreign letter."""
+    i = pos
+    while i < len(s):
+        if s[i] == '<':
+            close = s.find('>', i)
+            if close == -1:
+                return False
+            i = close + 1
+        else:
+            return _is_foreign_letter(s[i])
+    return False
+
+
+def _prev_text_is_letter(s, pos):
+    """Check if the previous non-tag character at or before pos is a foreign letter."""
+    i = pos
+    while i >= 0:
+        if s[i] == '>':
+            open_pos = s.rfind('<', 0, i)
+            if open_pos == -1:
+                return False
+            i = open_pos - 1
+        else:
+            return _is_foreign_letter(s[i])
+    return False
+
+
+def _prev_text_is_letter_or_digit(s, pos):
+    """Check if the previous non-tag character at or before pos is a letter or digit."""
+    i = pos
+    while i >= 0:
+        if s[i] == '>':
+            open_pos = s.rfind('<', 0, i)
+            if open_pos == -1:
+                return False
+            i = open_pos - 1
+        else:
+            return _is_foreign_letter(s[i]) or s[i].isdigit()
+    return False
+
+
+def _has_matching_close_paren(s, pos):
+    """Check if '(' at pos has a matching ')' scanning forward."""
+    depth = 0
+    in_tag = False
+    for i in range(pos, len(s)):
+        if s[i] == '<':
+            in_tag = True
+        elif s[i] == '>':
+            in_tag = False
+        elif not in_tag:
+            if s[i] == '(':
+                depth += 1
+            elif s[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    return True
+    return False
+
+
+def _has_matching_open_paren(s, pos, min_pos):
+    """Check if ')' at pos has a matching '(' scanning backward to min_pos."""
+    depth = 0
+    in_tag = False
+    for i in range(pos, min_pos - 1, -1):
+        if s[i] == '>':
+            in_tag = True
+        elif s[i] == '<':
+            in_tag = False
+        elif not in_tag:
+            if s[i] == ')':
+                depth += 1
+            elif s[i] == '(':
+                depth -= 1
+                if depth == 0:
+                    return True
+    return False
+
+
+def _trim_foreign_edges(content):
+    """Trim non-letter, non-tag characters from edges of each <foreign> tag.
+
+    Preserves word-bound punctuation at edges:
+    - '.' preceded by a letter or digit (abbreviation period, reference number)
+    - '-' adjacent to a letter (morphological marker)
+    - '(' with a matching ')' inside the tag (balanced parenthetical)
+    - ')' with a matching '(' inside the tag
+    """
+    def process(m):
+        inner = m.group(1)
+        left = 0
+        while left < len(inner):
+            c = inner[left]
+            if c == '<' or _is_foreign_letter(c):
+                break
+            if c == '-' and _next_text_is_letter(inner, left + 1):
+                break
+            if c == '(' and _has_matching_close_paren(inner, left):
+                break
+            left += 1
+        right = len(inner)
+        while right > left:
+            c = inner[right - 1]
+            if c == '>' or _is_foreign_letter(c) or c.isdigit():
+                break
+            if c == '-' and _prev_text_is_letter(inner, right - 2):
+                break
+            if c == '.' and right >= 2 and _prev_text_is_letter_or_digit(inner, right - 2):
+                break
+            if c == ')' and _has_matching_open_paren(inner, right - 1, left):
+                break
+            right -= 1
+        before = inner[:left]
+        middle = inner[left:right]
+        after = inner[right:]
+        if not middle:
+            return before + after
+        return f'{before}<foreign>{middle}</foreign>{after}'
+    return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
+
+
+def _remove_empty_foreign(content):
+    """Remove <foreign> tags whose content has no meaningful letters."""
+    def check(m):
+        if _has_foreign_letters(m.group(1)):
+            return m.group(0)
+        return m.group(1)
+    return re.sub(r'<foreign>(.*?)</foreign>', check, content, flags=re.DOTALL)
+
+
+def _split_foreign_at_unbalanced_parens(content):
+    """Split <foreign> tags at unmatched closing parentheses."""
+    def process(m):
+        inner = m.group(1)
+        segments = []
+        current_start = 0
+        depth = 0
+        in_tag = False
+        for i, c in enumerate(inner):
+            if c == '<':
+                in_tag = True
+            elif c == '>':
+                in_tag = False
+            elif not in_tag:
+                if c == '(':
+                    depth += 1
+                elif c == ')' and depth == 0:
+                    segments.append(('foreign', inner[current_start:i]))
+                    j = i
+                    while j < len(inner):
+                        if inner[j] == '<' or _is_foreign_letter(inner[j]):
+                            break
+                        j += 1
+                    segments.append(('outside', inner[i:j]))
+                    current_start = j
+                elif c == ')':
+                    depth -= 1
+        if not segments:
+            return m.group(0)
+        segments.append(('foreign', inner[current_start:]))
+        parts = []
+        for seg_type, seg_content in segments:
+            if not seg_content:
+                continue
+            if seg_type == 'foreign' and _has_foreign_letters(seg_content):
+                parts.append(f'<foreign>{seg_content}</foreign>')
+            else:
+                parts.append(seg_content)
+        return ''.join(parts)
+    return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
+
+
+def _split_foreign_at_unbalanced_open_parens(content):
+    """Split <foreign> tags before unmatched opening parentheses."""
+    def process(m):
+        inner = m.group(1)
+        in_tag = False
+        paren_positions = []
+        for i, c in enumerate(inner):
+            if c == '<':
+                in_tag = True
+            elif c == '>':
+                in_tag = False
+            elif not in_tag and c in '()':
+                paren_positions.append((i, c))
+        unmatched_opens = []
+        depth = 0
+        for pos, ch in reversed(paren_positions):
+            if ch == ')':
+                depth += 1
+            elif depth > 0:
+                depth -= 1
+            else:
+                unmatched_opens.append(pos)
+        if not unmatched_opens:
+            return m.group(0)
+        split_pos = min(unmatched_opens)
+        before = inner[:split_pos]
+        j = split_pos
+        while j < len(inner):
+            if inner[j] == '<' or _is_foreign_letter(inner[j]):
+                break
+            j += 1
+        between = inner[split_pos:j]
+        after = inner[j:]
+        parts = []
+        if _has_foreign_letters(before):
+            parts.append(f'<foreign>{before}</foreign>')
+        else:
+            parts.append(before)
+        parts.append(between)
+        if _has_foreign_letters(after):
+            parts.append(f'<foreign>{after}</foreign>')
+        else:
+            parts.append(after)
+        return ''.join(parts)
+    return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
+
+
+def normalize_foreign_boundaries(content):
+    """Clean up <foreign> tag boundaries."""
+    content = _trim_foreign_edges(content)
+    content = _remove_empty_foreign(content)
+    content = _split_foreign_at_unbalanced_parens(content)
+    content = _split_foreign_at_unbalanced_open_parens(content)
+    content = _trim_foreign_edges(content)
+    content = _remove_empty_foreign(content)
+    content = re.sub(r'-(<foreign>)', r'\1-', content)
+    content = re.sub(r'(</foreign>)-', r'-\1', content)
+    content = re.sub(r'</foreign>(\s*)<foreign>', r'\1', content)
+    return content
+
+
 def convert_to_xml(html):
     """Convert postprocessed HTML with <p> tags to XML with <entry> elements.
 
@@ -206,6 +530,9 @@ def convert_to_xml(html):
             content = content[3:]
 
         content = fix_tag_nesting(content)
+        content = flip_spans_to_foreign(content)
+        content = fix_tag_nesting(content)
+        content = normalize_foreign_boundaries(content)
         content = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#)', '&amp;', content)
 
         # Normalize mixed <b>+<u> markup in orth tags
@@ -319,7 +646,7 @@ def convert_to_xml(html):
         if entry['has_review']:
             attrs += ' data-review=""'
 
-        result_parts.append(f'<entry{attrs}>{entry["content"]}</entry>')
+        result_parts.append(f'<entry{attrs}>\n{entry["content"]}</entry>')
         entry_count += 1
         type_counts[entry['type']] += 1
         last_end = entry['end']

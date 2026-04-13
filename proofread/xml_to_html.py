@@ -34,6 +34,10 @@ def xml_to_html(xml_path='cavallinlatin.xml', html_path='cavallinlatin.html'):
     # Unescape &amp; back to & (HTML handles bare & in text fine)
     body = body.replace('&amp;', '&')
 
+    # Convert <foreign> to styled span for browser rendering
+    body = body.replace('<foreign>', '<span class="foreign">')
+    body = body.replace('</foreign>', '</span>')
+
     # HTML5 ignores /> on custom elements; give <cb/> an explicit close
     body = re.sub(r'<cb([^/>]*)/>', r'<cb\1></cb>', body)
 

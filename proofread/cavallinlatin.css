@@ -1,7 +1,7 @@
 cb { display: none; }
 orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
-span { background-color: #ceebfd; }
+.foreign { background-color: #ceebfd; }
 p[type="reference"] { background-color: #e8e8e8; }
 .sense { margin-left: 1.5em; }
 .sense[data-y] { cursor: pointer; }
