@@ -36,6 +36,20 @@ def is_sense_number(text):
 def postprocess(html):
     # === Phase 1: Text cleanup (no alignment needed) ===
 
+    # Move whitespace outside inline formatting tags
+    # (<i>text </i> -> <i>text</i> , and similarly for leading space).
+    # First, replace trailing <br/> inside these tags with a space so the
+    # whitespace normalization below can move it outside.
+    for tag in ('i', 'b', 'u'):
+        html = re.sub(rf'(<{tag}>[^<]*)<br\s*/?>\s*(</{tag}>)',
+                      rf'\1 \2', html)
+    for tag in ('i', 'b', 'u'):
+        html = re.sub(rf'<{tag}>([^<]*?) (</{tag}>)',
+                      rf'<{tag}>\1\2 ', html)
+        html = re.sub(rf'(<{tag}>) ([^<]*?)</{tag}>',
+                      rf' \1\2</{tag}>', html)
+        html = re.sub(rf'<{tag}>\s*</{tag}>', '', html)
+
     # Clean up some mistakes
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
@@ -57,6 +71,31 @@ def postprocess(html):
     html = html.replace('-<b>', '<b>-').replace('</b>-', '-</b>')
     html = re.sub(',([a-z])', r', \1', html)
     html = re.sub(r' (aa|bb|cc|dd|ee)\. ', r'<br/>\n\1. ', html)
+
+    # OCR/typesetter doubled periods — each fix uses enough surrounding
+    # context to uniquely identify the occurrence.
+    # Case `.:` — second period should have been a colon
+    html = re.sub(r'<i>([mfn])\.\.</i>', r'<i>\1.:</i>', html)
+    html = html.replace('<span>eg..</span>', '<span>eg.:</span>')
+    html = html.replace('<span>bildl..</span>', '<span>bildl.:</span>')
+    html = html.replace('ptum, 3.. <span>', 'ptum, 3.: <span>')
+    html = html.replace('i eg. men.. <b>', 'i eg. men.: <b>')
+    # Case `.,` — second period should have been a comma (citation separator)
+    html = html.replace('nec tacui d.. Vg.', 'nec tacui d., Vg.')
+    html = html.replace('homo n.. C. ep.', 'homo n., C. ep.')
+    html = html.replace('soldater:</span> C.. L.<br/>', 'soldater:</span> C., L.<br/>')
+    # Case `.` — extra period, collapse to single
+    html = html.replace('Rom. gentiln..</span>', 'Rom. gentiln.</span>')
+    html = html.replace('mättnad l.. trötthet', 'mättnad l. trötthet')
+    html = html.replace('v. gr..: <span>', 'v. gr.: <span>')
+    html = html.replace('bildhuggaren P.. (400', 'bildhuggaren P. (400')
+    html = html.replace('obtinere, Pn..</p>', 'obtinere, Pn.</p>')
+    html = html.replace('aqua, Col..<br/>', 'aqua, Col.<br/>')
+    html = html.replace('p. tr. gr.. <br/>', 'p. tr. gr. <br/>')
+    html = html.replace('berg i Epirus..</span>', 'berg i Epirus.</span>')
+    html = html.replace('(<i>dat.</i>.)', '(<i>dat.</i>)')
+    html = html.replace('—ior', '-ior')
+    html = html.replace('cĭlĭces,,', 'cĭlĭces,')
 
     # Locate headwords
     # A headword may span multiple consecutive <b>/<u> tag groups

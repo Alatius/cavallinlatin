@@ -2,6 +2,17 @@ cb { display: none; }
 orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
 .foreign { background-color: #ceebfd; }
+.pos { font-style: italic; background-color: #ff4444; color: white; }
+.gen { font-style: italic; background-color: #ff8800; }
+.subc { font-style: italic; background-color: #eeee00; }
+.case { font-style: italic; background-color: #44dd44; }
+.mood { font-style: italic; background-color: #00cccc; }
+.tns { font-style: italic; background-color: #4488ff; color: white; }
+.number { font-style: italic; background-color: #aa44ff; color: white; }
+.lbl { font-style: italic; background-color: #ff44cc; }
+.iType { background-color: #ff8844; }
+.gram { background-color: #88dddd; }
+.hom { background-color: #ffff88; font-weight: bold; }
 p[type="reference"] { background-color: #e8e8e8; }
 .sense { margin-left: 1.5em; }
 .sense[data-y] { cursor: pointer; }

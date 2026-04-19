@@ -483,17 +483,725 @@ def _split_foreign_at_unbalanced_open_parens(content):
     return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
 
 
+def _split_foreign_at_emdash(content):
+    """Move em-dashes that act as separators outside the <foreign> wrapper.
+
+    Splits at any em-dash preceded by whitespace and followed by a Latin
+    letter, a <br/>, or end-of-span. This catches:
+      - Reference separators: "Moveo. —Prompt"
+      - Trailing em-dashes before sense-end breaks: "Varr. —<br/>"
+      - Line-wrapped separators: "Navus.\n—<br/>\nIgne"
+    It leaves untouched:
+      - Metrical notation (⏑—⏑, ———⏑) where the em-dash sits between
+        non-whitespace prosodic symbols.
+      - Word-internal shortening (a—m) — no whitespace around the em-dash.
+    """
+    def process(m):
+        inner = m.group(1)
+        new_inner, n = re.subn(
+            r'(?<=\s)(—(?:\s|<br\s*/?>)*)(?=[A-Za-z-]|$)',
+            r'</foreign>\1<foreign>', inner)
+        if n == 0:
+            return m.group(0)
+        return f'<foreign>{new_inner}</foreign>'
+    return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
+
+
 def normalize_foreign_boundaries(content):
     """Clean up <foreign> tag boundaries."""
     content = _trim_foreign_edges(content)
     content = _remove_empty_foreign(content)
     content = _split_foreign_at_unbalanced_parens(content)
     content = _split_foreign_at_unbalanced_open_parens(content)
+    content = _split_foreign_at_emdash(content)
     content = _trim_foreign_edges(content)
     content = _remove_empty_foreign(content)
     content = re.sub(r'-(<foreign>)', r'\1-', content)
     content = re.sub(r'(</foreign>)-', r'-\1', content)
     content = re.sub(r'</foreign>(\s*)<foreign>', r'\1', content)
+    return content
+
+
+# --- Grammatical label conversion ---
+
+# Italic labels: <i>LABEL</i> inside <foreign> → <tei>LABEL</tei>
+# Compound labels are checked first (whole content), then single-word.
+COMPOUND_LABEL_TO_TEI = {
+    # --- Composite POS (numerals, pronouns — treat as single POS unit) ---
+    'A. Num. Ord.': 'pos', 'A. Num. Distrib.': 'pos',
+    'A. Num. Distr.': 'pos', 'A. Num. Card.': 'pos',
+    'Num. Card. Indecl.': 'pos', 'Num. Card.': 'pos',
+    'Num. Adj.': 'pos', 'Num. Distr.': 'pos', 'Num. Ord.': 'pos',
+    'A. Num.': 'pos',
+    'Pron. indef.': 'pos', 'Pron. relat.': 'pos',
+    'Pron. interrog.': 'pos', 'Pron. indefin.': 'pos',
+    'Pron. personale': 'pos', 'Pron. demonstrativum': 'pos',
+    'Pron. demonstr.': 'pos', 'Pron. determinativum': 'pos',
+    'V. impers.': 'pos',
+    'Conj. causalis': 'pos',
+
+    # --- Composite POS: pronouns with full Latin qualifier (treat as one) ---
+    'Pron. indefinitum': 'pos', 'Pron. possessivum': 'pos',
+    'Pron. possess.': 'pos', 'Pron. possessivum reflexivum': 'pos',
+    'Pron. reflexivum': 'pos', 'Pron. interrogativum': 'pos',
+    'Pron. Person.': 'pos', 'Pron. possessivum.': 'pos',
+
+    # --- Composite POS: verb class ---
+    'V. anom.': 'pos', 'Verb. anom.': 'pos',
+
+    # --- POS + gender (decomposed) ---
+    'A. f.': [('pos', 'A.'), ('gen', 'f.')],
+    'A., f.': [('pos', 'A.'), ('gen', 'f.')],
+    'f. A.': [('gen', 'f.'), ('pos', 'A.')],
+    'm. A.': [('gen', 'm.'), ('pos', 'A.')],
+    'm., A.': [('gen', 'm.'), ('pos', 'A.')],
+    'comm. A.': [('gen', 'comm.'), ('pos', 'A.')],
+    'A. m.': [('pos', 'A.'), ('gen', 'm.')],
+    'Adj. f.': [('pos', 'Adj.'), ('gen', 'f.')],
+    'Adj. m.': [('pos', 'Adj.'), ('gen', 'm.')],
+    'adj. f.': [('pos', 'adj.'), ('gen', 'f.')],
+    'f. adj.': [('gen', 'f.'), ('pos', 'adj.')],
+    'f. Adj.': [('gen', 'f.'), ('pos', 'Adj.')],
+    'Subst. m.': [('pos', 'Subst.'), ('gen', 'm.')],
+    'Subst., m.': [('pos', 'Subst.'), ('gen', 'm.')],
+    'Subst. n.': [('pos', 'Subst.'), ('gen', 'n.')],
+    'Subst. c.': [('pos', 'Subst.'), ('gen', 'c.')],
+    'Subst. comm.': [('pos', 'Subst.'), ('gen', 'comm.')],
+    'Subst. m. f.': [('pos', 'Subst.'), ('gen', 'm. f.')],
+    'Pron. A.': [('pos', 'Pron.'), ('pos', 'A.')],
+    'Pronomen A.': [('pos', 'Pronomen'), ('pos', 'A.')],
+
+    # --- POS + number (decomposed) ---
+    'Subst. pl.': [('pos', 'Subst.'), ('number', 'pl.')],
+    'Subst., pl.': [('pos', 'Subst.'), ('number', 'pl.')],
+    'm., pl.': [('gen', 'm.'), ('number', 'pl.')],
+    'm. pl.': [('gen', 'm.'), ('number', 'pl.')],
+    'f. pl.': [('gen', 'f.'), ('number', 'pl.')],
+    'n. pl. A.': [('gen', 'n.'), ('number', 'pl.'), ('pos', 'A.')],
+    'm. Dem.': [('gen', 'm.'), ('subc', 'Dem.')],
+    'f. Dem.': [('gen', 'f.'), ('subc', 'Dem.')],
+    'n. pr. m.': [('lbl', 'n. pr.'), ('gen', 'm.')],
+
+    # --- POS + comparison/list label (decomposed) ---
+    'A. Comp.': [('pos', 'A.'), ('lbl', 'Comp.')],
+    'A., Comp.': [('pos', 'A.'), ('lbl', 'Comp.')],
+    'A. Compar.': [('pos', 'A.'), ('lbl', 'Compar.')],
+    'A. Superl.': [('pos', 'A.'), ('lbl', 'Superl.')],
+    'A. Distribut.': [('pos', 'A.'), ('lbl', 'Distribut.')],
+    'A., Superl.': [('pos', 'A.'), ('lbl', 'Superl.')],
+    'Adv., Comp.': [('pos', 'Adv.'), ('lbl', 'Comp.')],
+    'Adv. Comp.': [('pos', 'Adv.'), ('lbl', 'Comp.')],
+    'Adv.: Comp.': [('pos', 'Adv.'), ('lbl', 'Comp.')],
+    'Comp., Adv.': [('lbl', 'Comp.'), ('pos', 'Adv.')],
+    'Comp., Sup.': [('lbl', 'Comp.'), ('lbl', 'Sup.')],
+    'Superl., Adv.': [('lbl', 'Superl.'), ('pos', 'Adv.')],
+
+    # --- POS + iType (decomposed) ---
+    'A. p. tr. gr.': [('pos', 'A.'), ('iType', 'p. tr. gr.')],
+
+    # --- POS + label (decomposed) ---
+    'Adv. Num.': [('pos', 'Adv.'), ('pos', 'Num.')],
+    'Adv. interr.': [('pos', 'Adv.'), ('lbl', 'interr.')],
+    'Adv. adversativ': [('pos', 'Adv.'), ('lbl', 'adversativ')],
+    'Adv. demonstrativum': [('pos', 'Adv.'), ('lbl', 'demonstrativum')],
+    'Conj. concessiva': [('pos', 'Conj.'), ('lbl', 'concessiva')],
+    'Conj. adversativa': [('pos', 'Conj.'), ('lbl', 'adversativa')],
+    'Conj., Præp.': [('pos', 'Conj.'), ('pos', 'Præp.')],
+    'Part. interrogativa': [('pos', 'Part.'), ('lbl', 'interrogativa')],
+    'Pron. determ., A.': [('pos', 'Pron. determ.'), ('pos', 'A.')],
+    'Pron. det., A.': [('pos', 'Pron. det.'), ('pos', 'A.')],
+    'Pron. indef. A.': [('pos', 'Pron. indef.'), ('pos', 'A.')],
+
+    # --- Label + POS (decomposed) ---
+    'indefinit Adv.': [('lbl', 'indefinit'), ('pos', 'Adv.')],
+    'indef. Adv.': [('lbl', 'indef.'), ('pos', 'Adv.')],
+    'disjunctiv Conj.': [('lbl', 'disjunctiv'), ('pos', 'Conj.')],
+
+    # --- Gender + number (decomposed) ---
+    'n. pl.': [('gen', 'n.'), ('number', 'pl.')],
+    'n. pl': [('gen', 'n.'), ('number', 'pl')],
+    'n.: plur.': [('gen', 'n.'), ('number', 'plur.')],
+    'pl. n.': [('number', 'pl.'), ('gen', 'n.')],
+    'pl. m.': [('number', 'pl.'), ('gen', 'm.')],
+    'pl. f.': [('number', 'pl.'), ('gen', 'f.')],
+    'neutr. pl.': [('gen', 'neutr.'), ('number', 'pl.')],
+    'f. sing.': [('gen', 'f.'), ('number', 'sing.')],
+    'fem. sing.': [('gen', 'fem.'), ('number', 'sing.')],
+    'sing. m.': [('number', 'sing.'), ('gen', 'm.')],
+    'plur. m.': [('number', 'plur.'), ('gen', 'm.')],
+    'plur. masc.': [('number', 'plur.'), ('gen', 'masc.')],
+    'masc. plur.': [('gen', 'masc.'), ('number', 'plur.')],
+    'A. pl.': [('pos', 'A.'), ('number', 'pl.')],
+
+    # --- Case + number (decomposed) ---
+    'abl. sing.': [('case', 'abl.'), ('number', 'sing.')],
+    'abl. pl.': [('case', 'abl.'), ('number', 'pl.')],
+    'abl. plur.': [('case', 'abl.'), ('number', 'plur.')],
+    'acc. sing.': [('case', 'acc.'), ('number', 'sing.')],
+    'acc. pl.': [('case', 'acc.'), ('number', 'pl.')],
+    'Acc. pl.': [('case', 'Acc.'), ('number', 'pl.')],
+    'acc. plur.': [('case', 'acc.'), ('number', 'plur.')],
+    'acc. plur. neutr.': [('case', 'acc.'), ('number', 'plur.'), ('gen', 'neutr.')],
+    'accus. sing.': [('case', 'accus.'), ('number', 'sing.')],
+    'dat. pl.': [('case', 'dat.'), ('number', 'pl.')],
+    'dat. plur.': [('case', 'dat.'), ('number', 'plur.')],
+    'gen. pl.': [('case', 'gen.'), ('number', 'pl.')],
+    'gen. plur.': [('case', 'gen.'), ('number', 'plur.')],
+    'gen. sing.': [('case', 'gen.'), ('number', 'sing.')],
+    'dat. sing.': [('case', 'dat.'), ('number', 'sing.')],
+    'nom. plur.': [('case', 'nom.'), ('number', 'plur.')],
+    'nom. plur. fem.': [('case', 'nom.'), ('number', 'plur.'), ('gen', 'fem.')],
+    'nom. plur. masc.': [('case', 'nom.'), ('number', 'plur.'), ('gen', 'masc.')],
+    'nom. masc.': [('case', 'nom.'), ('gen', 'masc.')],
+    'acc. fem.': [('case', 'acc.'), ('gen', 'fem.')],
+    'acc. m.': [('case', 'acc.'), ('gen', 'm.')],
+    'nom. sing.': [('case', 'nom.'), ('number', 'sing.')],
+    'nom. pl.': [('case', 'nom.'), ('number', 'pl.')],
+    'plur. nom.': [('number', 'plur.'), ('case', 'nom.')],
+    'loc. sing.': [('case', 'loc.'), ('number', 'sing.')],
+
+    # --- Case + gender (decomposed) ---
+    'abl. f.': [('case', 'abl.'), ('gen', 'f.')],
+    'abl. fem.': [('case', 'abl.'), ('gen', 'fem.')],
+    'abl. sing. fem.': [('case', 'abl.'), ('number', 'sing.'), ('gen', 'fem.')],
+    'abl. neutr.': [('case', 'abl.'), ('gen', 'neutr.')],
+    'abl. m.': [('case', 'abl.'), ('gen', 'm.')],
+    'acc. neutr.': [('case', 'acc.'), ('gen', 'neutr.')],
+    'acc. pl. neutr.': [('case', 'acc.'), ('number', 'pl.'), ('gen', 'neutr.')],
+    'pl. neutr. nom.': [('number', 'pl.'), ('gen', 'neutr.'), ('case', 'nom.')],
+    'Nom. neutr. gen.': [('case', 'Nom.'), ('gen', 'neutr.'), ('case', 'gen.')],
+    'nomen neutr. gen.': [('pos', 'nomen'), ('gen', 'neutr.'), ('case', 'gen.')],
+    'nom. sing. comm.': [('case', 'nom.'), ('number', 'sing.'), ('gen', 'comm.')],
+    'nom. sing. f.': [('case', 'nom.'), ('number', 'sing.'), ('gen', 'f.')],
+    'nom. sing. neutr.': [('case', 'nom.'), ('number', 'sing.'), ('gen', 'neutr.')],
+    'nom. plur. n.': [('case', 'nom.'), ('number', 'plur.'), ('gen', 'n.')],
+    'neutr. gen.': [('gen', 'neutr.'), ('case', 'gen.')],
+    'neutr. nom.': [('gen', 'neutr.'), ('case', 'nom.')],
+    'neutr. sing.': [('gen', 'neutr.'), ('number', 'sing.')],
+    'sing. acc.': [('number', 'sing.'), ('case', 'acc.')],
+    'sing. collectivt': [('number', 'sing.'), ('lbl', 'collectivt')],
+    'dat., abl.': [('case', 'dat.'), ('case', 'abl.')],
+    'dat., abl. pl.': [('case', 'dat.'), ('case', 'abl.'), ('number', 'pl.')],
+    'plur. dat., abl.': [('number', 'plur.'), ('case', 'dat.'), ('case', 'abl.')],
+
+    # --- Case + mood/label (decomposed) ---
+    'acc. inf.': [('case', 'acc.'), ('mood', 'inf.')],
+    'acc. modi': [('case', 'acc.'), ('lbl', 'modi')],
+    'absol. acc.': [('lbl', 'absol.'), ('case', 'acc.')],
+    'dat. pers.': [('case', 'dat.'), ('lbl', 'pers.')],
+    'dat. finalis': [('case', 'dat.'), ('lbl', 'finalis')],
+    'dat. commodi': [('case', 'dat.'), ('lbl', 'commodi')],
+    'dativus finalis': [('case', 'dativus'), ('lbl', 'finalis')],
+    'adj. neutr. gen.': [('pos', 'adj.'), ('gen', 'neutr.'), ('case', 'gen.')],
+    'imper. pass.': [('mood', 'imper.'), ('subc', 'pass.')],
+    'inf. act.': [('mood', 'inf.'), ('subc', 'act.')],
+    'cas. obl. sing.': [('lbl', 'cas. obl.'), ('number', 'sing.')],
+
+    # --- Gender + label combined ---
+    'Nom. Def.': [('case', 'Nom.'), ('lbl', 'Def.')],
+    'Nom. Num. indecl.': [('pos', 'Nom. Num.'), ('lbl', 'indecl.')],
+    'Indecl. n.': [('lbl', 'Indecl.'), ('gen', 'n.')],
+    'indecl. def. n.': [('lbl', 'indecl.'), ('lbl', 'def.'), ('gen', 'n.')],
+    'Subst. def.': [('pos', 'Subst.'), ('lbl', 'def.')],
+    'Subst. Def.': [('pos', 'Subst.'), ('lbl', 'Def.')],
+
+    # --- Two genders (combined) ---
+    'f., m.': 'gen', 'f. m.': 'gen',
+    'm., f.': 'gen', 'm. f.': 'gen',
+    'm., n.': 'gen', 'm. n.': 'gen',
+
+    # --- Two cases (combined) ---
+    'acc., abl.': 'case', 'gen., dat.': 'case',
+    'abl., acc.': 'case', 'gen., abl.': 'case',
+
+    # --- Participle + tense/voice (decomposed) ---
+    'part. pf.': [('lbl', 'part.'), ('tns', 'pf.')],
+    'part. præs.': [('lbl', 'part.'), ('tns', 'præs.')],
+    'part. praes.': [('lbl', 'part.'), ('tns', 'praes.')],
+    'part. perf.': [('lbl', 'part.'), ('tns', 'perf.')],
+    'part. pr.': [('lbl', 'part.'), ('tns', 'pr.')],
+    'part. præt.': [('lbl', 'part.'), ('tns', 'præt.')],
+    'part. fut.': [('lbl', 'part.'), ('tns', 'fut.')],
+    'part. pass.': [('lbl', 'part.'), ('subc', 'pass.')],
+    'part. pf. dep.': [('lbl', 'part.'), ('tns', 'pf.'), ('subc', 'dep.')],
+    'part. pf. pass.': [('lbl', 'part.'), ('tns', 'pf.'), ('subc', 'pass.')],
+    'perf. part. pass.': [('tns', 'perf.'), ('lbl', 'part.'), ('subc', 'pass.')],
+    'præs. part.': [('tns', 'præs.'), ('lbl', 'part.')],
+    'pt. pf.': [('lbl', 'pt.'), ('tns', 'pf.')],
+    'pt. pass.': [('lbl', 'pt.'), ('subc', 'pass.')],
+    'pt. præs.': [('lbl', 'pt.'), ('tns', 'præs.')],
+    'pf. pt.': [('tns', 'pf.'), ('lbl', 'pt.')],
+    'pf. part.': [('tns', 'pf.'), ('lbl', 'part.')],
+    'p. pf.': [('lbl', 'p.'), ('tns', 'pf.')],
+    'p. p.': 'lbl',  # ambiguous "participium perfecti" as a single unit
+    'p. præs.': [('lbl', 'p.'), ('tns', 'præs.')],
+    'p. pr.': [('lbl', 'p.'), ('tns', 'pr.')],
+    'pass. part.': [('subc', 'pass.'), ('lbl', 'part.')],
+    'pass. refl.': [('subc', 'pass.'), ('subc', 'refl.')],
+    'part. pt.': 'lbl',
+
+    # --- Tense + mood/form (decomposed) ---
+    'pf. inf.': [('tns', 'pf.'), ('mood', 'inf.')],
+    'pf. indic.': [('tns', 'pf.'), ('mood', 'indic.')],
+    'præs. conj.': [('tns', 'præs.'), ('mood', 'conj.')],
+    'impf. conj.': [('tns', 'impf.'), ('mood', 'conj.')],
+    'plusqpf. conj.': [('tns', 'plusqpf.'), ('mood', 'conj.')],
+    'inf. præs.': [('mood', 'inf.'), ('tns', 'præs.')],
+    'pr. conj.': [('tns', 'pr.'), ('mood', 'conj.')],
+    'Conj. pr.': [('mood', 'Conj.'), ('tns', 'pr.')],
+    'final conjunctivus': [('lbl', 'final'), ('mood', 'conjunctivus')],
+    'inf. historicus': 'lbl',
+    'fut. exact.': 'tns', 'fut. ex.': 'tns',
+    'fut. ex. pass.': [('tns', 'fut. ex.'), ('subc', 'pass.')],
+    'fut. ex. conj.': [('tns', 'fut. ex.'), ('mood', 'conj.')],
+
+    # --- Verb subcategorization compounds (decomposed) ---
+    'Dep. Frequ.': [('subc', 'Dep.'), ('subc', 'Frequ.')],
+    'Dep. intr.': [('subc', 'Dep.'), ('subc', 'intr.')],
+    'Frequ., intr.': [('subc', 'Frequ.'), ('subc', 'intr.')],
+    'pers., trans.': [('lbl', 'pers.'), ('subc', 'trans.')],
+    'depon. transit.': [('subc', 'depon.'), ('subc', 'transit.')],
+    'intr., absol.': [('subc', 'intr.'), ('lbl', 'absol.')],
+
+    # --- Label + gender (decomposed) ---
+    'ind. n.': [('lbl', 'ind.'), ('gen', 'n.')],
+    'def. n.': [('lbl', 'def.'), ('gen', 'n.')],
+    'f.: Dem.': [('gen', 'f.'), ('subc', 'Dem.')],
+    'm.: Dem.': [('gen', 'm.'), ('subc', 'Dem.')],
+    'A.: Dem.': [('pos', 'A.'), ('subc', 'Dem.')],
+    'A. Dem.': [('pos', 'A.'), ('subc', 'Dem.')],
+    'A. indecl.': [('pos', 'A.'), ('lbl', 'indecl.')],
+    'relat. indefinitum, Adj.': [('lbl', 'relat. indefinitum'), ('pos', 'Adj.')],
+
+    # --- Idiomatic constructions (keep as single unit) ---
+    'acc. c. inf.': 'lbl', 'acc. cum inf.': 'lbl',
+    'acc. c. inf. fut.': 'lbl', 'acc. cum inf. futuri': 'lbl',
+    'accus. c. inf.': 'lbl',
+    'abl. absol.': 'lbl',
+    'accus. mensuræ': 'lbl', 'abl. mensuræ': 'lbl',
+    'gen. part.': 'lbl', 'gen. qual.': 'lbl', 'gen. pretii': 'lbl',
+    'gen. obj.': 'lbl', 'gen. subj.': 'lbl',
+    'genitivi qualitatis': 'lbl',
+    'abl. mens.': 'lbl', 'n. app.': 'lbl',
+    'accus. temporis': 'lbl',
+    'dat. gerundivi': 'lbl',
+    'acc. græc.': 'lbl',
+    'abl. pretii': 'lbl',
+    'acc. obj.': 'lbl', 'acc. gr.': 'lbl',
+    'sing. collect.': 'lbl',
+    'cas. obl.': 'lbl',
+    'nom. propr.': 'lbl', 'n. propr.': 'lbl', 'nom. pr.': 'lbl',
+    'pronomen indefinitum, interrogativum, relativum': 'pos',
+    'præs., impf., fut.': 'tns',
+    'relativum indefinitum': 'lbl',
+    'indirect frågesats': 'lbl',
+    'pl. tant.': 'lbl',
+    'amplific.': 'lbl', 'abstr.': 'lbl', 'nominat.': 'case',
+    'obj. acc.': 'lbl', 'obj.-acc.': 'lbl',
+    'subjects-acc.': 'lbl', 'prædicats-accus.': 'lbl',
+    'objects-acc.': 'lbl', 'accus. object': 'lbl',
+    'objects-': 'lbl', 'object': 'lbl', 'måttsaccus.': 'lbl',
+    'abl.?': 'case',
+
+    # --- Verb type labels (keep as single unit) ---
+    'verb. Def.': 'lbl', 'Verb. defect.': 'lbl', 'Verb. def.': 'lbl',
+    'verb. defect.': 'lbl',
+    'Verb. anomalum': 'lbl',
+    'Positivus': 'lbl', 'indefin.': 'lbl',
+}
+
+# Single-word labels
+LABEL_TO_TEI = {
+    # POS
+    'A.': 'pos', 'Adj.': 'pos', 'adj.': 'pos',
+    'Adv.': 'pos', 'adv.': 'pos',
+    'Subst.': 'pos', 'subst.': 'pos',
+    'Præp.': 'pos', 'Præpos.': 'pos', 'præp.': 'pos', 'præpos.': 'pos',
+    'Conj.': 'pos', 'Conjunction': 'pos', 'conjunction': 'pos',
+    'Conjunctio': 'pos',
+    'Interj.': 'pos', 'interjection': 'pos',
+    'Pron.': 'pos', 'Pronom.': 'pos', 'pronom.': 'pos', 'pronomen': 'pos',
+    'Adverbium': 'pos', 'Nomen': 'pos', 'nomen': 'pos',
+    'A': 'pos',  # dropped period (18 occurrences)
+    'S.': 'pos',  # Swedish "Substantiv" (noun) — see Colchus entry
+    # Gender
+    'm.': 'gen', 'f.': 'gen', 'n.': 'gen', 'c.': 'gen',
+    'comm.': 'gen', 'masc.': 'gen', 'fem.': 'gen',
+    # Verb subcategorization
+    'Dep.': 'subc', 'dep.': 'subc',
+    'Frequ.': 'subc', 'frequ.': 'subc', 'Frequ': 'subc',
+    'Inch.': 'subc', 'Inchoat.': 'subc',
+    'Intens.': 'subc', 'Desid.': 'subc',
+    'Dem.': 'subc', 'dem.': 'subc', 'Demin.': 'subc',
+    'trans.': 'subc', 'transit.': 'subc', 'tr.': 'subc',
+    'trans': 'subc', 'transitivt': 'subc',
+    'intrans.': 'subc', 'intr.': 'subc',
+    'pass.': 'subc', 'Pass.': 'subc',
+    'act.': 'subc', 'activ': 'subc', 'activum': 'subc',
+    'refl.': 'subc', 'reflex.': 'subc', 'reflexivt': 'subc',
+    'impers.': 'subc', 'Impers.': 'subc',
+    'passivum': 'subc',
+    # Case
+    'abl.': 'case', 'Abl.': 'case',
+    'dat.': 'case', 'Dat.': 'case', 'dativ': 'case',
+    'acc.': 'case', 'Acc.': 'case', 'accus.': 'case', 'Accus.': 'case',
+    'gen.': 'case', 'Gen.': 'case', 'genit.': 'case', 'genitivus': 'case',
+    'nom.': 'case', 'Nom.': 'case', 'nomin.': 'case',
+    'voc.': 'case', 'vocat.': 'case',
+    'loc.': 'case', 'locativ': 'case',
+    # Mood
+    'conj.': 'mood', 'conjunctivus': 'mood',
+    'ind.': 'mood', 'Ind.': 'mood', 'indic.': 'mood',
+    'imper.': 'mood', 'Imp.': 'mood',
+    'imperat.': 'mood', 'imperativus': 'mood',
+    'inf.': 'mood', 'infin.': 'mood', 'infinit.': 'mood',
+    'subj.': 'mood',
+    'indicat.': 'mood', 'indicativus': 'mood',
+    # Tense
+    'pf.': 'tns', 'perf.': 'tns',
+    'præs.': 'tns', 'praes.': 'tns', 'præsens': 'tns',
+    'fut.': 'tns', 'futurum': 'tns',
+    'impf.': 'tns', 'plusqpf.': 'tns', 'plusqf.': 'tns',
+    'supin.': 'tns', 'sup.': 'tns',
+    # Number
+    'plur.': 'number', 'pl.': 'number', 'sing.': 'number',
+    # Labels
+    'Comp.': 'lbl', 'comp.': 'lbl', 'Compar.': 'lbl',
+    'Comparat.': 'lbl', 'Comparativus': 'lbl',
+    'comparativ': 'lbl', 'comparativa': 'lbl', 'comparativum': 'lbl',
+    'Superl.': 'lbl', 'superl.': 'lbl', 'Sup.': 'lbl',
+    'Superlativus': 'lbl', 'superlativer': 'lbl',
+    'part.': 'lbl', 'Part.': 'lbl', 'pt.': 'lbl', 'partic.': 'lbl',
+    'syn.': 'lbl', 'synon.': 'lbl',
+    'absol.': 'lbl', 'absolut': 'lbl',
+    'n. pr.': 'lbl', 'indecl.': 'lbl', 'Indecl.': 'lbl',
+    'Distrib.': 'lbl', 'Distribut.': 'lbl',
+    'relat.': 'lbl', 'relativ': 'lbl', 'relativum': 'lbl',
+    'relativa': 'lbl', 'relativt': 'lbl', 'relativsats': 'lbl',
+    'reflexiva': 'lbl', 'reflexivum': 'lbl',
+    'possessivus': 'lbl', 'possessivum': 'lbl', 'possess.': 'lbl',
+    'indefinitum': 'lbl', 'indefinit': 'lbl', 'indef.': 'lbl',
+    'interrogativum': 'lbl', 'interrogativ': 'lbl', 'interrog.': 'lbl',
+    'interr.': 'lbl', 'interrogativa': 'lbl',
+    'demonstrativum': 'lbl',
+    'temporal': 'lbl', 'consecutiv': 'lbl', 'concessiv': 'lbl',
+    'concessiva': 'lbl', 'adversativ': 'lbl', 'adversativa': 'lbl',
+    'disjunctiv': 'lbl', 'causal': 'lbl', 'causativt': 'lbl',
+    'conclusiv': 'lbl', 'correlat': 'lbl', 'modal': 'lbl',
+    'modale': 'lbl', 'modalis': 'lbl', 'local': 'lbl',
+    'conjunctivisk': 'lbl', 'final': 'lbl', 'hypothetisk': 'lbl',
+    'Posit.': 'lbl', 'posit.': 'lbl', 'pos.': 'lbl', 'poet.': 'lbl',
+    'determinativum': 'lbl',
+    'personelt': 'lbl', 'personl.': 'lbl', 'collect.': 'lbl',
+    'demonstr.': 'lbl', 'deponential': 'lbl',
+    'Deminutivum': 'subc',
+    'Supinum': 'tns',
+    'Participium': 'lbl',
+    'Vocativus': 'case',
+    'Depon': 'subc',
+    'def.': 'lbl', 'Def.': 'lbl',
+    'frågeord': 'lbl', 'frågepartikel': 'lbl',
+    'neutr.': 'lbl',  # as label (not gender)
+    'obj.': 'lbl', 'pers.': 'lbl', 'subject': 'lbl',
+}
+
+_TEI_ELEMENTS = frozenset([
+    'pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',
+    'iType', 'gram', 'lbl',
+])
+_TEI_TAG_RE = re.compile(
+    r'<(' + '|'.join(_TEI_ELEMENTS) + r')\b[^>]*>.*?</\1>', re.DOTALL)
+
+
+def _decompose_label(raw, parts):
+    """Wrap raw text parts in TEI tags, preserving whitespace between them.
+
+    `parts` is a list of (tag, content) tuples. Each part's content is found
+    in `raw` in order, and the text between parts (separators like spaces,
+    newlines, commas) is preserved verbatim.
+    """
+    result = []
+    pos = 0
+    for tag, content in parts:
+        idx = raw.find(content, pos)
+        if idx < 0:
+            # Fallback: emit with single spaces if we can't find the content
+            return ' '.join(f'<{t}>{c}</{t}>' for t, c in parts)
+        if idx > pos:
+            result.append(raw[pos:idx])
+        result.append(f'<{tag}>{content}</{tag}>')
+        pos = idx + len(content)
+    if pos < len(raw):
+        result.append(raw[pos:])
+    return ''.join(result)
+
+
+def _wrap_label(raw, tei, trailing, after):
+    """Wrap `raw` in the appropriate TEI tag(s) and append trailing/after."""
+    content = raw.rstrip()
+    if trailing:
+        content = content[:-len(trailing)]
+    if isinstance(tei, list):
+        return _decompose_label(content, tei) + trailing + after
+    return f'<{tei}>{content}</{tei}>{trailing}{after}'
+
+
+def _convert_italic_label(m):
+    """Convert a single <i>CONTENT</i> to a TEI element if it's a grammar label."""
+    raw = m.group(1)
+    after = m.group(2)  # character after </i>, if any
+
+    # Build lookup key: collapse newlines to spaces for matching
+    key = raw.replace('\n', ' ')
+    key = key.strip()
+
+    # Separate trailing punctuation for lookup
+    trailing = ''
+    while key and key[-1] in ':,;':
+        trailing = key[-1] + trailing
+        key = key[:-1]
+    key = key.strip()
+
+    # Try compound lookup first, then single-word
+    tei = COMPOUND_LABEL_TO_TEI.get(key)
+    if tei is None:
+        tei = LABEL_TO_TEI.get(key)
+
+    # Handle <i>A</i>. pattern: period outside italic
+    if tei is None and after == '.' and not trailing:
+        candidate = key + '.'
+        tei = COMPOUND_LABEL_TO_TEI.get(candidate)
+        if tei is None:
+            tei = LABEL_TO_TEI.get(candidate)
+        if tei:
+            # Absorb the period into the element
+            return _wrap_label(raw.rstrip() + '.', tei, trailing, '')
+
+    if tei is None:
+        return m.group(0)  # leave unchanged
+
+    return _wrap_label(raw, tei, trailing, after)
+
+
+_TAG_RE = re.compile(r'<[^>]+>')
+_TAG_NAME_RE = re.compile(r'^</?(\w+)')
+_SKIP_TAGS = _TEI_ELEMENTS | {'i'}
+
+
+def _convert_upright_labels(inner):
+    """Convert bare (upright) grammar labels in text segments of a foreign span.
+
+    Only processes text that is NOT inside an already-converted TEI element.
+    """
+    tokens = []
+    pos = 0
+    for m in _TAG_RE.finditer(inner):
+        if m.start() > pos:
+            tokens.append(('text', inner[pos:m.start()]))
+        tokens.append(('tag', m.group()))
+        pos = m.end()
+    if pos < len(inner):
+        tokens.append(('text', inner[pos:]))
+
+    result = []
+    changed = False
+    skip_depth = 0  # track nesting inside TEI elements and <i> tags
+    for tok_type, tok_val in tokens:
+        if tok_type == 'tag':
+            tag_m = _TAG_NAME_RE.match(tok_val)
+            if tag_m and tag_m.group(1) in _SKIP_TAGS:
+                if tok_val.startswith('</'):
+                    skip_depth -= 1
+                else:
+                    skip_depth += 1
+            result.append(tok_val)
+            continue
+
+        # Skip text inside TEI elements and <i> tags
+        if skip_depth > 0:
+            result.append(tok_val)
+            continue
+
+        # Replace known upright patterns in text
+        new_val = tok_val
+        for pattern, repl_fmt in _UPRIGHT_PATTERNS:
+            new_text = pattern.sub(repl_fmt, new_val)
+            if new_text != new_val:
+                changed = True
+                new_val = new_text
+        result.append(new_val)
+
+    return ''.join(result), changed
+
+
+# Upright patterns: (compiled regex, tei tag name, replacement format)
+_UPRIGHT_PATTERNS = [
+    # Multi-word patterns first (longer matches first)
+    (re.compile(r'\bp\. tr\. gr\.'), r'<iType>p. tr. gr.</iType>'),
+    (re.compile(r'\bs\. p\. et s\.'), r'<iType>s. p. et s.</iType>'),
+    (re.compile(r'\bv\. gr\.'), r'<gram type="etym">v. gr.</gram>'),
+    # Bare single-word labels (typesetter errors — should be italic).
+    # Lookbehind excludes word chars and hyphens to avoid matching inside
+    # compound words like "Semi-Dep."
+    (re.compile(r'(?<![<\w-])Dep\.(?!\w)'), r'<subc>Dep.</subc>'),
+    (re.compile(r'(?<![<\w-])Frequ\.(?!\w)'), r'<subc>Frequ.</subc>'),
+    (re.compile(r'(?<![<\w-])frequ\.(?!\w)'), r'<subc>frequ.</subc>'),
+    (re.compile(r'(?<![<\w-])Inch\.(?!\w)'), r'<subc>Inch.</subc>'),
+    (re.compile(r'(?<![<\w-])part\.(?!\w)'), r'<lbl>part.</lbl>'),
+]
+
+
+_CONJ_NUMBER_RE = re.compile(
+    r'(?<=[, ])( ?)([1-4])(\.?)(?=\s*$|\s*[:;,]?\s*<(?:'
+    + '|'.join(_TEI_ELEMENTS) + r')\b)')
+
+
+def _convert_conj_number(inner):
+    """Convert conjugation numbers (1-4) in a foreign span.
+
+    Matches at end of span, or before punctuation followed by a TEI element.
+    The period after the digit is optional (some entries have '2' not '2.').
+    """
+    m = _CONJ_NUMBER_RE.search(inner)
+    if not m:
+        return inner, False
+
+    space = m.group(1)
+    num = m.group(2)
+    dot = m.group(3)
+    return (inner[:m.start()] + space + f'<iType>{num}{dot}</iType>'
+            + inner[m.end():], True)
+
+
+def _split_foreign_wrapper(inner):
+    """Split <foreign> wrapper: TEI elements go outside, Latin text stays inside."""
+    # Find all TEI elements in the inner content
+    parts = []
+    last_end = 0
+    for m in _TEI_TAG_RE.finditer(inner):
+        before = inner[last_end:m.start()]
+        if before:
+            parts.append(('text', before))
+        parts.append(('tei', m.group()))
+        last_end = m.end()
+    trailing = inner[last_end:]
+    if trailing:
+        parts.append(('text', trailing))
+
+    # If no TEI elements found, return wrapped as-is
+    if not any(ptype == 'tei' for ptype, _ in parts):
+        return f'<foreign>{inner}</foreign>'
+
+    # Rebuild: wrap text parts in <foreign> if they have foreign letters
+    result = []
+    for i, (ptype, pcontent) in enumerate(parts):
+        if ptype == 'tei':
+            result.append(pcontent)
+        elif _has_foreign_letters(pcontent):
+            # Trim trailing separator chars if followed by a TEI element
+            if i + 1 < len(parts) and parts[i + 1][0] == 'tei':
+                m = re.search(r'[,;:\s]+$', pcontent)
+                if m:
+                    result.append(f'<foreign>{pcontent[:m.start()]}</foreign>')
+                    result.append(m.group())
+                else:
+                    result.append(f'<foreign>{pcontent}</foreign>')
+            else:
+                result.append(f'<foreign>{pcontent}</foreign>')
+        else:
+            result.append(pcontent)
+
+    return ''.join(result)
+
+
+def convert_homograph_number(content):
+    """Convert <foreign>I.</foreign> at entry start to <hom>I.</hom>.
+
+    Roman numeral (or digit) wrapped in <foreign> at the beginning of an
+    entry content marks a homograph (e.g., "I. Mannus" vs. "II. Mannus").
+    """
+    return re.sub(
+        r'^(\s*)<foreign>([IVX]+|\d+)\.</foreign>',
+        r'\1<hom>\2.</hom>',
+        content)
+
+
+def convert_grammar_labels(content):
+    """Convert grammatical labels inside <foreign> from <i> to TEI elements."""
+
+    def _process_span(match):
+        inner = match.group(1)
+        original = match.group(0)
+
+        # Step A: Convert italic labels
+        # Match <i>...</i> possibly followed by a single char (for period absorption)
+        new_inner = re.sub(r'<i>([^<]*)</i>(.?)',
+                           _convert_italic_label, inner)
+        made_changes = (new_inner != inner)
+        inner = new_inner
+
+        # Step B: Convert upright labels
+        inner, upright_changed = _convert_upright_labels(inner)
+        made_changes = made_changes or upright_changed
+
+        # Step C: Convert conjugation numbers — only if italic or upright
+        # labels already matched. Otherwise a citation like "Pn. ep. VI. 2."
+        # would have its trailing "2." mistaken for a conjugation number.
+        if made_changes:
+            inner, _ = _convert_conj_number(inner)
+
+        if not made_changes:
+            return original
+
+        # Step D: Split/remove <foreign> wrapper
+        return _split_foreign_wrapper(inner)
+
+    content = re.sub(r'<foreign>(.*?)</foreign>', _process_span,
+                     content, flags=re.DOTALL)
+
+    # Convert bare conjugation numbers after </orth>, e.g. "</orth>, 3.:" ->
+    # "</orth>, <iType>3.</iType>:". Also handles parenthetical content with
+    # inline tags (like <foreign>) between </orth> and the number.
+    # Skip if the digit is inside a <foreign> tag (those are handled later
+    # by convert_inflection_conj_numbers which also splits the wrapper).
+    def _bare_conj(m):
+        prefix = m.group(1)
+        if prefix.count('<foreign') > prefix.count('</foreign'):
+            return m.group(0)
+        return f'{prefix}<iType>{m.group(2)}{m.group(3)}</iType>{m.group(4)}'
+
+    content = re.sub(
+        r'(</orth>(?:(?!<b>|<sense|</entry|<iType).)*?)([1-4])(\.?)(\s*:)',
+        _bare_conj, content, flags=re.DOTALL)
+
+    return content
+
+
+def convert_inflection_conj_numbers(content):
+    """Convert conjugation numbers inside <foreign> spans that directly
+    follow </orth>, e.g. "</orth> <foreign>ui, 1.</foreign>:" ->
+    "</orth> <foreign>ui</foreign>, <iType>1.</iType>:". Citation spans
+    elsewhere (e.g. "Pn. ep. VI. 2.") are not touched because they don't
+    follow </orth>. Must run AFTER normalize_foreign_boundaries so that
+    trailing punctuation inside <foreign> has been trimmed out.
+    """
+    def _convert(m):
+        prefix, inner, sep, num, dot, trailing = m.groups()
+        if inner:
+            return (f'{prefix}<foreign>{inner}</foreign>{sep}'
+                    f'<iType>{num}{dot}</iType>{trailing}')
+        return f'{prefix}{sep.lstrip()}<iType>{num}{dot}</iType>{trailing}'
+
+    # Loop: each pass converts one trailing number per <foreign>, so
+    # entries with multiple conjugation numbers (e.g. "bui, 2., 3.") need
+    # repeated application to catch the earlier digits. The final group
+    # captures optional trailing punctuation ("3.;" — see Transfundo) that
+    # should be moved outside the new <iType>.
+    pattern = r'(</orth>[, ]*)<foreign>([^<]*?)([ ,]+)([1-4])(\.?)([;,]?)</foreign>'
+    prev = None
+    while prev != content:
+        prev = content
+        content = re.sub(pattern, _convert, content)
     return content
 
 
@@ -533,7 +1241,41 @@ def convert_to_xml(html):
         content = flip_spans_to_foreign(content)
         content = fix_tag_nesting(content)
         content = normalize_foreign_boundaries(content)
+
+        # Grammar label conversion is restricted to the headword area
+        # (before the first <sense>). Inside senses, abbreviations like
+        # "med abl.:" are usage/construction notes, not headword morphology,
+        # and should keep their original <i>/<foreign> markup.
+        sense_pos = content.find('<sense')
+        if sense_pos >= 0:
+            head = convert_grammar_labels(content[:sense_pos])
+            content = head + content[sense_pos:]
+        else:
+            content = convert_grammar_labels(content)
+
+        content = normalize_foreign_boundaries(content)
+        content = convert_inflection_conj_numbers(content)
+        # Wrap bare conjugation numbers after grammar tags (e.g. Dep. 1. → Dep. <iType>1.</iType>)
+        content = re.sub(r'(</subc>) ([1-4])\.', r'\1 <iType>\2.</iType>', content)
+        content = convert_homograph_number(content)
         content = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#)', '&amp;', content)
+
+        # Clean up <orth> boundaries: move punctuation and parentheses
+        # outside the tag. Hyphens stay inside (morphological markers).
+        # Move <cb/> from inside <orth> to just before it (the existing
+        # entry-boundary normalization will then push it between entries).
+        content = re.sub(
+            r'(<orth[^>]*>(?:<[bu]>)?)(<cb[^/]*/>) ?',
+            r'\2\1', content)
+        # Trailing ,;: — may be bare or inside </b></u>
+        content = re.sub(
+            r'([,;:])((?:</[bu]>)*</orth>)', r'\2\1', content)
+        # Leading (
+        content = re.sub(
+            r'(<orth[^>]*>(?:<[bu]>)?)\(', r'(\1', content)
+        # Trailing )
+        content = re.sub(
+            r'\)((?:</[bu]>)*</orth>)', r'\1)', content)
 
         # Normalize mixed <b>+<u> markup in orth tags
         content = normalize_mixed_markup(content)
@@ -542,7 +1284,8 @@ def convert_to_xml(html):
         explicit_num = None
         orth_pos = content.find('<orth')
         prefix = content[:orth_pos] if orth_pos >= 0 else ''
-        num_match = re.match(r'^([IVX]+|\d+)\.\s*', prefix)
+        num_match = re.match(
+            r'^\s*(?:<hom>)?([IVX]+|\d+)\.(?:</hom>)?\s*', prefix)
         if num_match:
             num_str = num_match.group(1)
             if num_str.isdigit():

@@ -38,6 +38,18 @@ def xml_to_html(xml_path='cavallinlatin.xml', html_path='cavallinlatin.html'):
     body = body.replace('<foreign>', '<span class="foreign">')
     body = body.replace('</foreign>', '</span>')
 
+    # Convert TEI grammar elements to styled spans
+    _TEI_TAGS = ('pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',
+                 'iType', 'gram', 'lbl', 'hom')
+    body = re.sub(
+        r'<(' + '|'.join(_TEI_TAGS) + r')\b([^>]*)>',
+        lambda m: f'<span class="{m.group(1)}"{m.group(2)}>',
+        body)
+    body = re.sub(
+        r'</(' + '|'.join(_TEI_TAGS) + r')>',
+        '</span>',
+        body)
+
     # HTML5 ignores /> on custom elements; give <cb/> an explicit close
     body = re.sub(r'<cb([^/>]*)/>', r'<cb\1></cb>', body)
 
