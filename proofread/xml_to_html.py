@@ -34,9 +34,11 @@ def xml_to_html(xml_path='cavallinlatin.xml', html_path='cavallinlatin.html'):
     # Unescape &amp; back to & (HTML handles bare & in text fine)
     body = body.replace('&amp;', '&')
 
-    # Convert <foreign> to styled span for browser rendering
+    # Convert <foreign> and <form> to styled spans for browser rendering
     body = body.replace('<foreign>', '<span class="foreign">')
     body = body.replace('</foreign>', '</span>')
+    body = re.sub(r'<form\b([^>]*)>', r'<span class="form"\1>', body)
+    body = body.replace('</form>', '</span>')
 
     # Convert TEI grammar elements to styled spans
     _TEI_TAGS = ('pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',

@@ -109,7 +109,7 @@ def fix_tag_nesting(content):
     Closes open inline tags before <sense>/</sense> and reopens them inside,
     producing valid XML nesting.
     """
-    INLINE_TAGS = {'span', 'foreign', 'b', 'i', 'u'}
+    INLINE_TAGS = {'span', 'foreign', 'form', 'b', 'i', 'u'}
 
     tokens = []
     pos = 0
@@ -516,9 +516,11 @@ def normalize_foreign_boundaries(content):
     content = _split_foreign_at_emdash(content)
     content = _trim_foreign_edges(content)
     content = _remove_empty_foreign(content)
+    content = re.sub(r'<foreign>(<cb[^/]*/>) ?', r'\1<foreign>', content)
     content = re.sub(r'-(<foreign>)', r'\1-', content)
     content = re.sub(r'(</foreign>)-', r'-\1', content)
     content = re.sub(r'</foreign>(\s*)<foreign>', r'\1', content)
+    content = _remove_empty_foreign(content)
     return content
 
 
@@ -1046,6 +1048,7 @@ _UPRIGHT_PATTERNS = [
     (re.compile(r'(?<![<\w-])Dep\.(?!\w)'), r'<subc>Dep.</subc>'),
     (re.compile(r'(?<![<\w-])Frequ\.(?!\w)'), r'<subc>Frequ.</subc>'),
     (re.compile(r'(?<![<\w-])frequ\.(?!\w)'), r'<subc>frequ.</subc>'),
+    (re.compile(r'(?<![<\w-])Inchoat\.(?!\w)'), r'<subc>Inchoat.</subc>'),
     (re.compile(r'(?<![<\w-])Inch\.(?!\w)'), r'<subc>Inch.</subc>'),
     (re.compile(r'(?<![<\w-])part\.(?!\w)'), r'<lbl>part.</lbl>'),
 ]
@@ -1197,11 +1200,344 @@ def convert_inflection_conj_numbers(content):
     # repeated application to catch the earlier digits. The final group
     # captures optional trailing punctuation ("3.;" — see Transfundo) that
     # should be moved outside the new <iType>.
-    pattern = r'(</orth>[, ]*)<foreign>([^<]*?)([ ,]+)([1-4])(\.?)([;,]?)</foreign>'
+    pattern = r'(</orth>[, ]*)<foreign>([^<]*?)([,\s]+)([1-4])(\.?)([;,]?)</foreign>'
     prev = None
     while prev != content:
         prev = content
         content = re.sub(pattern, _convert, content)
+    return content
+
+
+# --- Inflection form conversion ---
+
+def _normalize_for_lookup(s):
+    """Strip diacritics and normalize j/v/æ/œ for Collatinus lookup."""
+    s = remove_accents(s)
+    return s.lower().replace('j', 'i').replace('v', 'u').replace('æ', 'ae').replace('œ', 'oe')
+
+
+def _build_collatinus_cache(forms):
+    """Batch-lemmatize forms via Collatinus, return {form: set_of_lemma_keys}."""
+    import json
+    import urllib.request
+
+    cache = {}
+    forms = sorted(set(forms))
+    batch_size = 500
+    for i in range(0, len(forms), batch_size):
+        batch = forms[i:i + batch_size]
+        text = ' '.join(batch)
+        req = urllib.request.Request(
+            'http://localhost:8080/api/lemmatize/text',
+            data=json.dumps({'text': text, 'lang': 'en'}).encode(),
+            headers={'Content-Type': 'application/json'},
+        )
+        try:
+            resp = urllib.request.urlopen(req, timeout=30)
+            data = json.loads(resp.read())
+            for r in data['results']:
+                token = r['token'].lower()
+                lemmas = {a['lemma']['key'] for a in r['analyses']}
+                if lemmas:
+                    cache[token] = lemmas
+        except Exception as e:
+            print(f"  WARNING: Collatinus batch {i // batch_size + 1} failed: {e}")
+    return cache
+
+
+def _norm_lemma_key(key):
+    """Normalize a Collatinus lemma key for comparison (strip homonym number)."""
+    return _normalize_for_lookup(key.rstrip('0123456789'))
+
+
+def _validate_form(hw_norm, hw_lemmas, part_norm, cache):
+    """Check if part shares a lemma with hw via reconstruction or direct lookup."""
+    # Build normalized key set for the headword, including the headword itself
+    # as a pseudo-lemma (handles cases where Collatinus resolves to a different
+    # homonym or variant, e.g. Aonides→Aonides2, Africa→africum).
+    hw_keys = {_norm_lemma_key(k) for k in hw_lemmas}
+    hw_keys.add(hw_norm)
+
+    def _check(lemmas):
+        return bool(hw_keys & {_norm_lemma_key(k) for k in lemmas})
+
+    # Direct lookup of the ending
+    part_lemmas = cache.get(part_norm, set())
+    if _check(part_lemmas):
+        return True
+    # Reconstructions: try stripping 1-5 chars from hw and appending ending
+    for strip in range(1, min(6, len(hw_norm))):
+        recon = hw_norm[:len(hw_norm) - strip] + part_norm
+        recon_lemmas = cache.get(recon, set())
+        if _check(recon_lemmas):
+            return True
+    return False
+
+
+_INFLECTION_GRAM_TAGS = r'gen|pos|iType|subc|lbl|number'
+_INFLECTION_RE = re.compile(
+    r'(</orth>)([,\s:]*\)?[,\s:]*(?:<cb[^/]*/>[,\s]*)*)<foreign>([^<]+)</foreign>'
+    r'([,\s]*<(?:' + _INFLECTION_GRAM_TAGS + r')'  # grammar tag
+    r'|[,\s]*(?:och\s|l\.\s)'                         # Swedish connective
+    r'|[,\s]*<(?:orth|form)'                           # next headword/form
+    r'|\s*[:(])')                                       # colon or paren boundary
+# Secondary: alternative forms connected by 'l.'/'och' after a <form>
+_ALT_FORM_RE = re.compile(
+    r'(</form>)([,\s]*(?:l\.|och)\s*)<foreign>([^<]+)</foreign>')
+# Inflection endings always start lowercase (with or without diacritics)
+# or with '-' (comparative forms like -ior). This filters out grammar labels
+# and Latin words that aren't endings.
+_INFLECTION_START_RE = re.compile(
+    r'[a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿāăēĕīĭōŏūŭȳ\-]')
+# Grammar labels/descriptions that look like inflections (lowercase) but aren't.
+# These slip through the lowercase guard because they start with a lowercase letter
+# or are abbreviations. Checked per comma-separated part.
+# Map non-inflection content to the TEI element it should become instead.
+# These are grammar labels/descriptions that appear inside <foreign> spans
+# after </orth> but aren't inflectional forms.
+_LABEL_INSTEAD_OF_FORM = {
+    # Gender labels
+    'c.': 'gen', 'c.:': 'gen', 'n.': 'gen', 'm.': 'gen',
+    'f.': 'gen', 'comm.': 'gen',
+    # Number labels
+    'pl.': 'number',
+    # POS labels
+    'interj.': 'pos', 'pronom.:': 'pos', 'præp.': 'pos', 'pron.': 'pos',
+    'interjection': 'pos',
+    'verbum defectivum': 'pos', 'interjectio gr.': 'pos',
+    'particula interrogandi': 'pos', 'adverb. temporale': 'pos',
+    'nom. numerale indecl.': 'pos',
+    'particula inseparabilis': 'pos', 'particula demonstrandi': 'pos',
+    # Case labels
+    'nom.': 'case', 'abl.': 'case',
+    # Compound labels
+    's. s.': 'lbl', 's.s.': 'lbl', 'act.': 'lbl', 'num. indecl.': 'lbl',
+    'p. p.': 'lbl', 'pt. pf.': 'lbl', 'pron. poss.': 'lbl',
+    'rom. n. pr.': 'lbl', 'def.': 'lbl', 'indcl.': 'lbl',
+    's. p.': 'lbl', 'adv. interr.': 'lbl',
+    # Inflection type
+    's. p. et sup.': 'iType',
+    # Etymology
+    'v. etrusca': 'gram', 'v. gr.': 'gram',
+}
+# Content that should not become <form> but doesn't map to a TEI element either.
+# Leaked connectives, non-inflection words, mixed content, derivational suffixes.
+_NOT_INFLECTION = {
+    # Leaked connectives
+    'l.', 'l', 'och', 'ac',
+    # Full Latin words (not endings)
+    'flumen', 'ager', 'lacus', 'scalae',
+    # Derivational suffixes (not inflections)
+    '-tiuncula', '-tor', '-litas',
+    # Citation/definition text and parsing artifacts
+    'pro levi', 'senes appellabantur', 'a e',
+    # Reference
+    'fr. IV.',
+}
+_CONJ_WITH_COLON_RE = re.compile(r'^([1-4])\.:$')
+
+
+def _prescan_inflection_forms(entries):
+    """Collect all forms needed for Collatinus batch validation."""
+    forms = set()
+    for entry in entries:
+        for m in _INFLECTION_RE.finditer(entry['content']):
+            foreign = m.group(3)
+            if '(' in foreign:
+                continue
+            # Find headword: search backwards for nearest <orth>
+            orth_m = list(re.finditer(
+                r'<orth[^>]*>(.*?)</orth>', entry['content'][:m.end()]))
+            if not orth_m:
+                continue
+            hw = re.sub(r'<[^>]*>', '', orth_m[-1].group(1)).strip()
+            hw_norm = _normalize_for_lookup(hw)
+            forms.add(hw_norm)
+            for part in (p.strip() for p in foreign.split(',') if p.strip()):
+                part_norm = _normalize_for_lookup(part)
+                forms.add(part_norm)
+                for strip in range(1, min(6, len(hw_norm))):
+                    forms.add(hw_norm[:len(hw_norm) - strip] + part_norm)
+    return forms
+
+
+def _split_paren_segments(text):
+    """Split text into segments outside and inside parentheses.
+
+    Returns list of (is_paren, content) tuples preserving original text.
+    E.g. "(esculus), i" → [(True,"(esculus)"), (False,", i")]
+    """
+    segments = []
+    depth = 0
+    start = 0
+    for i, c in enumerate(text):
+        if c == '(':
+            if depth == 0 and i > start:
+                segments.append((False, text[start:i]))
+            if depth == 0:
+                paren_start = i
+            depth += 1
+        elif c == ')' and depth > 0:
+            depth -= 1
+            if depth == 0:
+                segments.append((True, text[paren_start:i + 1]))
+                start = i + 1
+    if start < len(text):
+        segments.append((False, text[start:]))
+    return segments
+
+
+def convert_inflection_forms(content, collatinus_cache, stats):
+    """Convert <foreign> inflection spans after </orth> to <form> elements."""
+    # Pre-find orth positions for headword lookup
+    orth_ends = []
+    for om in re.finditer(r'<orth[^>]*>(.*?)</orth>', content):
+        hw = re.sub(r'<[^>]*>', '', om.group(1)).strip()
+        orth_ends.append((om.end(), hw))
+
+    def _classify(parts, hw_norm, hw_lemmas):
+        if hw_lemmas is not None:
+            valid = all(
+                _validate_form(hw_norm, hw_lemmas,
+                               _normalize_for_lookup(p), collatinus_cache)
+                for p in parts)
+            if valid:
+                stats['validated'] += len(parts)
+            else:
+                stats['suspicious'] += len(parts)
+                for p in parts:
+                    stats['suspicious_items'].append(p)
+        else:
+            stats['unconfirmed'] += len(parts)
+
+    _BARE_CONJ_RE = re.compile(r'^[1-4]\.?$')
+
+    def _wrap_part(part):
+        """Wrap a part in <form> or the appropriate TEI tag."""
+        # Normalize internal newlines for label lookup
+        part_key = re.sub(r'\s+', ' ', part)
+        tei = _LABEL_INSTEAD_OF_FORM.get(part_key)
+        if tei:
+            content = part.rstrip(':')
+            colon = ':' if part.endswith(':') else ''
+            return f'<{tei}>{content}</{tei}>{colon}'
+        cm = _CONJ_WITH_COLON_RE.match(part)
+        if cm:
+            return f'<iType>{cm.group(1)}.</iType>:'
+        if _BARE_CONJ_RE.match(part):
+            n = part.rstrip('.')
+            return f'<iType>{n}.</iType>'
+        if not _is_inflection(part):
+            return part
+        return f'<form>{part}</form>'
+
+    _GRAM_PREFIX_RE = re.compile(
+        r'^(?:pl|gen|voc|neutr|adv|nom|abl|dat|acc)\.\s')
+    _LEAKED_SUFFIX_RE = re.compile(r'\s(?:l\.|och|\d\.)$')
+
+    def _is_inflection(part):
+        part_key = re.sub(r'\s+', ' ', part)
+        if _LABEL_INSTEAD_OF_FORM.get(part_key) is not None:
+            return False
+        if _CONJ_WITH_COLON_RE.match(part) or _BARE_CONJ_RE.match(part):
+            return False
+        if not _INFLECTION_START_RE.match(part.lstrip()):
+            return False
+        if part in _NOT_INFLECTION:
+            return False
+        # Multi-word content with 3+ words is likely citation text
+        if len(part.split()) >= 3:
+            return False
+        # Reject content with semicolons or colons (grammar notes, leaked text)
+        if ';' in part or ':' in part:
+            return False
+        # Grammar label prefix (pl. -li, gen. Nostri, voc. -thū, etc.)
+        if _GRAM_PREFIX_RE.match(part):
+            return False
+        # Leaked trailing connective or conj number (ŏnis l., ĭtus 2.)
+        if _LEAKED_SUFFIX_RE.search(part):
+            return False
+        return True
+
+    def _replace(m):
+        foreign_content = m.group(3)
+
+        # Find headword for this position
+        target = m.start() + len('</orth>')
+        hw_text = None
+        for end_pos, hw in orth_ends:
+            if end_pos == target:
+                hw_text = hw
+                break
+        if not hw_text:
+            return m.group(0)
+
+        hw_norm = _normalize_for_lookup(hw_text)
+        hw_lemmas = collatinus_cache.get(hw_norm)
+
+        # No parentheses — simple case
+        if '(' not in foreign_content:
+            parts = [p.strip() for p in foreign_content.split(',')
+                     if p.strip()]
+            infl_parts = [p for p in parts if _is_inflection(p)]
+            if not infl_parts:
+                return m.group(0)
+            _classify(infl_parts, hw_norm, hw_lemmas)
+            formed = ', '.join(_wrap_part(p) for p in parts)
+            return f'{m.group(1)}{m.group(2)}{formed}{m.group(4)}'
+
+        # Parenthetical content — extract endings from non-paren segments
+        segments = _split_paren_segments(foreign_content)
+        non_paren_text = ''.join(s for is_p, s in segments if not is_p)
+        endings = [p.strip() for p in non_paren_text.split(',') if p.strip()]
+        infl_endings = [e for e in endings if _is_inflection(e)]
+
+        if not infl_endings:
+            stats['skipped'] += 1
+            stats['skipped_items'].append(foreign_content)
+            return m.group(0)
+
+        _classify(infl_endings, hw_norm, hw_lemmas)
+
+        # Rebuild: paren segments stay as <foreign>, endings become <form>
+        result_parts = []
+        for is_paren, seg in segments:
+            if is_paren:
+                result_parts.append(f'<foreign>{seg}</foreign>')
+            else:
+                # Split this text segment at commas into endings
+                pieces = seg.split(',')
+                rebuilt = []
+                for piece in pieces:
+                    stripped = piece.strip()
+                    if stripped:
+                        # Preserve whitespace around the ending
+                        before = piece[:len(piece) - len(piece.lstrip())]
+                        after = piece[len(piece.rstrip()):]
+                        rebuilt.append(f'{before}{_wrap_part(stripped)}{after}')
+                    else:
+                        rebuilt.append(piece)
+                result_parts.append(','.join(rebuilt))
+
+        inner = ''.join(result_parts)
+        return f'{m.group(1)}{m.group(2)}{inner}{m.group(4)}'
+
+    content = _INFLECTION_RE.sub(_replace, content)
+
+    # Convert alternative forms connected by 'l.'/'och' after a <form>
+    def _replace_alt(m):
+        foreign_content = m.group(3)
+        if '(' in foreign_content:
+            return m.group(0)
+        parts = [p.strip() for p in foreign_content.split(',') if p.strip()]
+        infl_parts = [p for p in parts if _is_inflection(p)]
+        if not infl_parts:
+            return m.group(0)
+        stats['unconfirmed'] += len(infl_parts)
+        formed = ', '.join(_wrap_part(p) for p in parts)
+        return f'{m.group(1)}{m.group(2)}{formed}'
+
+    content = _ALT_FORM_RE.sub(_replace_alt, content)
     return content
 
 
@@ -1311,6 +1647,31 @@ def convert_to_xml(html):
             'type': entry_type,
             'root': None,
         })
+
+    # --- Convert inflection forms to <form> elements ---
+    forms_to_check = _prescan_inflection_forms(entries)
+    print(f"  Checking {len(forms_to_check)} forms against Collatinus...")
+    collatinus_cache = _build_collatinus_cache(forms_to_check)
+    print(f"  Collatinus cache: {len(collatinus_cache)} forms lemmatized")
+    infl_stats = {
+        'validated': 0, 'unconfirmed': 0, 'suspicious': 0, 'skipped': 0,
+        'suspicious_items': [], 'skipped_items': [],
+    }
+    for entry in entries:
+        entry['content'] = convert_inflection_forms(
+            entry['content'], collatinus_cache, infl_stats)
+    print(f"  Inflection forms: validated={infl_stats['validated']}, "
+          f"unconfirmed={infl_stats['unconfirmed']}, "
+          f"suspicious={infl_stats['suspicious']}, "
+          f"skipped={infl_stats['skipped']}")
+
+    from collections import Counter
+    for category in ('suspicious', 'skipped'):
+        counts = Counter(infl_stats[f'{category}_items'])
+        with open(f'inflection_{category}.txt', 'w', encoding='utf-8') as f:
+            for item, cnt in counts.most_common():
+                f.write(f'{cnt:4d}  {item}\n')
+        print(f"  Wrote inflection_{category}.txt ({len(counts)} unique)")
 
     # --- Group non-ref entries by base_id ---
     groups = defaultdict(list)

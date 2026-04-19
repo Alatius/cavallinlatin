@@ -2,6 +2,7 @@ cb { display: none; }
 orth { background-color: rgb(222, 150, 248); cursor: pointer; }
 orth:hover { background-color: rgb(244, 212, 255); }
 .foreign { background-color: #ceebfd; }
+.form { background-color: #c8e6c9; }
 .pos { font-style: italic; background-color: #ff4444; color: white; }
 .gen { font-style: italic; background-color: #ff8800; }
 .subc { font-style: italic; background-color: #eeee00; }
