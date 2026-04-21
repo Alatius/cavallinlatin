@@ -1793,11 +1793,13 @@ def convert_to_xml(html):
 
     xml = ''.join(result_parts)
 
-    # Normalize <cb/> at entry boundaries: move them between entries
-    xml = re.sub(r'(<cb n="[^"]*"/>)\s*(</entry>)', r'\2\n\1', xml)
+    # Pull boundary <cb/> tags into the following entry so every <cb/>
+    # lives inside an <entry> (simpler DB shredding downstream).
     xml = re.sub(
-        r'(<entry[^>]*>)((?:<[^/>][^>]*(?<!/)>)*)(<cb n="[^"]*"/>)',
-        r'\3\n\1\2', xml)
+        r'<cb\b([^/]*)/>\s*(</entry>\s*)?(<entry\b[^>]*>)',
+        lambda m: f'{m.group(2) or ""}{m.group(3)}\n<cb{m.group(1)}/>',
+        xml,
+    )
 
     return xml, entry_count
 
