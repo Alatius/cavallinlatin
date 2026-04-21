@@ -507,6 +507,37 @@ def _split_foreign_at_emdash(content):
     return re.sub(r'<foreign>(.*?)</foreign>', process, content, flags=re.DOTALL)
 
 
+def _pull_quote_into_foreign(content):
+    """Keep Swedish quote pairs (”…”) on the same side of <foreign> boundaries.
+
+    If an opening ” sits just before <foreign> and a matching ” exists inside,
+    move the outer ” inside. Mirror for a closing ” sitting just after
+    </foreign> when an unmatched ” is inside.
+    """
+    if '”' not in content:
+        return content
+    # Tempered inner (not plain .*?) so pull_closing doesn't skip past a
+    # </foreign> not followed by ” and rewrap a later span's boundary.
+    inner_re = r'((?:(?!</foreign>).)*)'
+
+    def pull_opening(m):
+        inner = m.group(1)
+        if '”' in inner:
+            return f'<foreign>”{inner}</foreign>'
+        return m.group(0)
+    content = re.sub(rf'”<foreign>{inner_re}</foreign>', pull_opening,
+                     content, flags=re.DOTALL)
+
+    def pull_closing(m):
+        inner = m.group(1)
+        if '”' in inner:
+            return f'<foreign>{inner}”</foreign>'
+        return m.group(0)
+    content = re.sub(rf'<foreign>{inner_re}</foreign>”', pull_closing,
+                     content, flags=re.DOTALL)
+    return content
+
+
 def normalize_foreign_boundaries(content):
     """Clean up <foreign> tag boundaries."""
     content = _trim_foreign_edges(content)
@@ -521,6 +552,7 @@ def normalize_foreign_boundaries(content):
     content = re.sub(r'(</foreign>)-', r'-\1', content)
     content = re.sub(r'</foreign>(\s*)<foreign>', r'\1', content)
     content = _remove_empty_foreign(content)
+    content = _pull_quote_into_foreign(content)
     return content
 
 
