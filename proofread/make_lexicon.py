@@ -1729,7 +1729,7 @@ def convert_to_xml(html):
                             num += 1
                         print(f"  WARNING: duplicate explicit homograph {orig} "
                               f"for '{base_id}', reassigned to {num}")
-                    entry['entry_id'] = f'{base_id}#{num}'
+                    entry['entry_id'] = f'{base_id}{num}'
                     taken.add(num)
 
             # Step 2: fill in remaining with lowest available numbers
@@ -1738,7 +1738,7 @@ def convert_to_xml(html):
                 if entry['entry_id'] is None:
                     while next_num in taken:
                         next_num += 1
-                    entry['entry_id'] = f'{base_id}#{next_num}'
+                    entry['entry_id'] = f'{base_id}{next_num}'
                     taken.add(next_num)
                     next_num += 1
 
