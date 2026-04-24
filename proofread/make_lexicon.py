@@ -1573,6 +1573,65 @@ def convert_inflection_forms(content, collatinus_cache, stats):
     return content
 
 
+def _fixup_orphan_entries(entries):
+    """Handle the three entries that come out of fodt→html with no <orth>.
+
+    These are artefacts of the source typography — they look like dictionary
+    entries to the OCR/fodt pipeline but have no headword to hang an id on.
+    Without fixup they'd surface as 'unknown1', 'unknown2', 'unknown3' in the
+    editor index.
+
+      1. "I sammansättningar …" — a continuation of the 'ad' article describing
+         how the prefix assimilates. Merge it into the preceding 'ad' entry.
+      2. "Bokstafwen K brukades …" — an article about the letter K itself.
+         Promote the embedded <foreign>K</foreign> to <orth>K</orth> so it
+         becomes a proper K-entry.
+      3. "Bihang upptagande tillägg …" — the heading of the appendix, not a
+         dictionary entry at all. Drop it; the following entry absorbs the
+         preceding html gap (which carries the column-break <cb/>).
+
+    Span bookkeeping: Pass 2 emits `html[last_end:entry.start]` as the gap
+    before each entry. Dropping or merging therefore has to adjust neighbour
+    spans or Pass 2 will still emit the dropped entry's raw <p>…</p>.
+    """
+    def visible_text(entry):
+        return re.sub(r'<[^>]*>', '', entry['content']).strip()
+
+    result = []
+    for i, entry in enumerate(entries):
+        if entry['base_id'] != 'unknown':
+            result.append(entry)
+            continue
+
+        text = visible_text(entry)
+
+        if text.startswith('I sammansättningar') and result:
+            # Merge into preceding entry: append content, extend its span so
+            # Pass 2 skips over the orphan's <p>…</p> in the raw html.
+            prev = result[-1]
+            prev['content'] = prev['content'].rstrip() + '\n' + entry['content']
+            prev['end'] = entry['end']
+        elif '<foreign>K</foreign>' in entry['content']:
+            entry['content'] = entry['content'].replace(
+                '<foreign>K</foreign>', '<orth>K</orth>', 1)
+            entry['base_id'] = 'k'
+            entry['type'] = determine_entry_type(entry['content'], entry['has_ref'])
+            result.append(entry)
+        elif text.startswith('Bihang'):
+            # Drop silently: rewind the following entry's start back to this
+            # orphan's start so Pass 2's gap slice skips this <p> but still
+            # emits the html before it (carrying any column-break <cb/> into
+            # the inter-entry gap, where the cb-pull regex at the end of
+            # convert_to_xml will absorb it into the following entry).
+            if i + 1 < len(entries):
+                entries[i + 1]['start'] = entry['start']
+        else:
+            print(f"  WARNING: orphan entry (no <orth>) left as-is: {text[:80]!r}")
+            result.append(entry)
+
+    return result
+
+
 def convert_to_xml(html):
     """Convert postprocessed HTML with <p> tags to XML with <entry> elements.
 
@@ -1679,6 +1738,8 @@ def convert_to_xml(html):
             'type': entry_type,
             'root': None,
         })
+
+    entries = _fixup_orphan_entries(entries)
 
     # --- Convert inflection forms to <form> elements ---
     forms_to_check = _prescan_inflection_forms(entries)

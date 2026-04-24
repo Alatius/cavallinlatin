@@ -51,6 +51,7 @@ def postprocess(html):
         html = re.sub(rf'<{tag}>\s*</{tag}>', '', html)
 
     # Clean up some mistakes
+    html = html.replace('<s>', '').replace('</s>', '').replace('<s/>', '')
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
     html = re.sub('(<b>[^<]*?) *<br/>\n', r'\1</b><br/>\n<b>', html)
