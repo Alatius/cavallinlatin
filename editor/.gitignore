@@ -1,0 +1,18 @@
+data/cavallin.db
+data/cavallin.db-journal
+data/cavallin.db-wal
+data/cavallin.db-shm
+data/backups/
+# Column images — derived from the committed TIFFs at ../columns/
+# via `python -m app.scripts.convert_tiff_to_png`.
+data/columns/
+.env
+
+backend/.venv/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/*.egg-info/
+
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo

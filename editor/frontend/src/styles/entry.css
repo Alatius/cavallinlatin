@@ -1,0 +1,105 @@
+/* Styles for HTML rendered from an <entry> XML fragment (see render.ts).
+   The base `.entry-render` rules are shared by the editor preview and the
+   public view. `.entry-render--public` strips the color-coded tag palette
+   and adds clean reading typography. */
+
+/* ---------- Shared ---------- */
+
+.entry-render {
+  font-family: 'Gentium', 'Iowan Old Style', 'Palatino Linotype', Palatino,
+               Cambria, Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.entry-render p { margin: 0.5em 0; }
+.entry-render cb { display: none; }
+
+/* ---------- Editor view: color-coded tag distinctions ----------
+   Pale tinted backgrounds + matching darker text. Each tag stays
+   identifiable at a glance without the shouty saturation of the
+   original palette. */
+
+.entry-render orth      { background: #eedcf3; color: #5a2079; cursor: pointer; }
+.entry-render orth:hover{ background: #f7ecfb; }
+.entry-render .foreign  { background: #dcebf7; color: #1f4972; }
+.entry-render .form     { background: #ddecd8; color: #2c5f2c; }
+.entry-render .pos      { background: #f6dddd; color: #7a2020; font-style: italic; }
+.entry-render .gen      { background: #f6dfc4; color: #7a4a14; font-style: italic; }
+.entry-render .subc     { background: #ede4b4; color: #6e5b10; font-style: italic; }
+.entry-render .case     { background: #d7e9ce; color: #3a6a20; font-style: italic; }
+.entry-render .mood     { background: #d2e8e0; color: #1f6458; font-style: italic; }
+.entry-render .tns      { background: #dae2f5; color: #2a4088; font-style: italic; }
+.entry-render .number   { background: #e5dbf4; color: #4a2088; font-style: italic; }
+.entry-render .lbl      { background: #f4dce5; color: #7a2255; font-style: italic; }
+.entry-render .iType    { background: #f5dcc7; color: #7a3c18; }
+.entry-render .gram     { background: #d3e8ec; color: #1d5662; }
+.entry-render .hom      { background: #ece2b0; color: #6a5718; font-weight: bold; }
+.entry-render p[type="reference"] { background: #efefef; }
+/* Hanging indent: the sense number pokes out to the left of the
+   continuation lines, matching the dictionary tradition. */
+.entry-render .sense {
+  margin-left: 1.2em;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+.entry-render .sense[data-y] { cursor: pointer; }
+.entry-render .sense-num { color: #5a2079; }
+
+/* ---------- Public view: clean reading typography ---------- */
+
+.entry-render--public {
+  font-size: 1.15rem;
+  line-height: 1.5;
+  color: #1a1a1a;
+  text-align: justify;
+  font-feature-settings: "kern", "liga";
+  max-width: 42rem;
+}
+
+/* Reset every background/foreground colour inherited from the editor rules. */
+.entry-render--public orth,
+.entry-render--public orth:hover,
+.entry-render--public .foreign,
+.entry-render--public .form,
+.entry-render--public .pos,
+.entry-render--public .gen,
+.entry-render--public .subc,
+.entry-render--public .case,
+.entry-render--public .mood,
+.entry-render--public .tns,
+.entry-render--public .number,
+.entry-render--public .lbl,
+.entry-render--public .iType,
+.entry-render--public .gram,
+.entry-render--public .hom,
+.entry-render--public .sense-num,
+.entry-render--public p[type="reference"] {
+  background: transparent;
+  color: inherit;
+}
+
+/* The distinctions that are worth preserving typographically. */
+.entry-render--public orth { font-weight: 700; color: #702895; }
+.entry-render--public .foreign { color: #2a558e; }
+.entry-render--public .pos,
+.entry-render--public .gen,
+.entry-render--public .subc,
+.entry-render--public .case,
+.entry-render--public .mood,
+.entry-render--public .tns,
+.entry-render--public .number,
+.entry-render--public .lbl { font-style: italic; }
+.entry-render--public .hom { font-weight: 700; }
+.entry-render--public .sense-num { font-weight: 700; }
+
+/* Hanging indent on paragraphs (public only): the headword pokes out to the
+   left of the continuation lines, matching the dictionary tradition. The
+   equivalent rule for .sense now lives in the shared block above. */
+.entry-render--public p {
+  margin: 0 0 0.55em 0;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+
+/* Cross-references: slightly muted, otherwise plain. */
+.entry-render--public p[type="reference"] { color: #555; }
