@@ -27,7 +27,7 @@ def roman_to_int(s):
 # All others with this pattern are derived forms (normalize to <u>Xrest</u>).
 MIXED_PROPER_IDS = {'Aethiops', 'Aloeus', 'Eburones', 'Gergovia', 'Ocnus', 'Oreas'}
 
-MARKUP_LEVELS = {'plain': 0, 'derived': 1, 'proper': 2, 'major': 3}
+MARKUP_LEVELS = {'plain': 0, 'derived': 1, 'proper': 2, 'primary': 3}
 LEVEL_TO_TYPE = {v: k for k, v in MARKUP_LEVELS.items()}
 
 
@@ -71,20 +71,20 @@ def normalize_mixed_markup(content):
 def classify_orth(orth_inner_html):
     """Classify an orth tag's content by its markup level.
 
-    Returns: 'major', 'proper', 'derived', or 'plain'.
+    Returns: 'primary', 'proper', 'derived', or 'plain'.
     """
     bare = orth_inner_html.strip().lstrip('(')
 
     if bare.startswith('<b>'):
         close_b = bare.find('</b>')
         if close_b < 0:
-            return 'major'
+            return 'primary'
         after_b = bare[close_b + 4:]
         after_text = re.sub(r'<[^>]*>', '', after_b)
         after_letters = sum(1 for c in after_text if c.isalpha())
         if after_letters >= 2:
             return 'proper'
-        return 'major'
+        return 'primary'
     elif bare.startswith('<u>'):
         return 'derived'
     return 'plain'
@@ -1636,7 +1636,7 @@ def convert_to_xml(html):
     """Convert postprocessed HTML with <p> tags to XML with <entry> elements.
 
     Entry types (from orth markup, max level across all orths):
-    - major:     fully bold headword — root/core vocabulary
+    - primary:   fully bold headword — root/core vocabulary
     - proper:    first-letter-bold headword — proper nouns
     - derived:   underlined headword — etymological derivatives
     - reference: cross-reference entry (from data-ref)
@@ -1649,7 +1649,7 @@ def convert_to_xml(html):
       in dictionary order.
     - Singleton entries (one non-ref, no explicit number) get a bare id.
 
-    Derived entries get a root attribute pointing to the most recent major entry.
+    Derived entries get a root attribute pointing to the most recent primary entry.
     """
 
     # --- Pass 1: collect all entries ---
@@ -1820,7 +1820,7 @@ def convert_to_xml(html):
     # --- Assign root for derived/plain entries ---
     last_root_id = None
     for entry in entries:
-        if entry['type'] in ('major', 'proper'):
+        if entry['type'] in ('primary', 'proper'):
             last_root_id = entry['entry_id']
         elif entry['type'] in ('derived', 'plain') and last_root_id is not None:
             entry['root'] = last_root_id
