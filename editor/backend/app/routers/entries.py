@@ -35,7 +35,9 @@ def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | N
         '        WHERE sort_key > e.sort_key '
         '        ORDER BY sort_key ASC LIMIT 1) AS next_url_id, '
         '       (SELECT headword FROM entries '
-        '        WHERE xml_id = e.xml_root LIMIT 1) AS root_headword '
+        '        WHERE xml_id = e.xml_root LIMIT 1) AS root_headword, '
+        '       (SELECT url_id FROM entries '
+        '        WHERE xml_id = e.xml_root LIMIT 1) AS root_url_id '
         'FROM entries e LEFT JOIN users u ON u.id = e.lock_user_id '
         'WHERE e.url_id = ?',
         (url_id,),
@@ -62,6 +64,7 @@ def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | N
         next_url_id=row['next_url_id'],
         updated_at=row['updated_at'], lock=lock,
         root_headword=row['root_headword'],
+        root_url_id=row['root_url_id'],
     )
 
 

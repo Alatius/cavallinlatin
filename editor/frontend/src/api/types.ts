@@ -58,6 +58,7 @@ export interface Entry {
   updated_at: number;
   lock: LockInfo | null;
   root_headword: string | null;
+  root_url_id: string | null;
 }
 
 export interface EntryGroupItem {

@@ -196,7 +196,12 @@ export default function EntryEditor() {
 
   const toolbar = (
     <>
-      <Breadcrumb head={ent.entry.root_headword} current={ent.entry.headword} />
+      <Breadcrumb
+        head={ent.entry.root_headword}
+        current={ent.entry.headword}
+        headTo={ent.entry.root_url_id ? `/editor/entry/${ent.entry.root_url_id}` : null}
+        currentTo={`/editor/entry/${ent.entry.url_id}`}
+      />
       <span
         className={`status-badge status-badge--${ent.status}`}
         title="Aktuell status"

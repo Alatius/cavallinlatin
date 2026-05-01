@@ -235,7 +235,12 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  color: inherit;
 }
+a.entry-breadcrumb__head,
+a.entry-breadcrumb__current { text-decoration: none; }
+a.entry-breadcrumb__head:hover,
+a.entry-breadcrumb__current:hover { text-decoration: underline; }
 
 /* Editor shell: header + body row (index | main) */
 

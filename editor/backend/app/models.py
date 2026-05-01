@@ -80,10 +80,12 @@ class EntryOut(BaseModel):
     next_url_id: str | None
     updated_at: int
     lock: LockInfo | None = None
-    # Headword of the entry whose xml_id matches this entry's xml_root, used
-    # by the toolbar breadcrumb. Null for primary/proper entries (which are
-    # roots themselves) and for orphans whose root is missing.
+    # Headword + url_id of the entry whose xml_id matches this entry's
+    # xml_root, used by the toolbar breadcrumb. Null for primary/proper
+    # entries (which are roots themselves) and for orphans whose root is
+    # missing.
     root_headword: str | None = None
+    root_url_id: str | None = None
 
 
 class EntryList(BaseModel):

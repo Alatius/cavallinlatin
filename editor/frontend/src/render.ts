@@ -121,6 +121,8 @@ export function entryXmlToHtml(xml: string): string {
 // Whitespace is passed through verbatim so text layout is unchanged. Text
 // content is emitted as-is: in valid XML it is already entity-encoded
 // (&amp;, &lt;, …) so the browser decodes it the same way HTML expects.
+// Hyphens are remapped to U+2011 NON-BREAKING HYPHEN so word-initial
+// suffixes like "-us" can never be orphaned by a line break.
 function emitText(xml: string, start: number, end: number): string {
   let out = '';
   let i = start;
@@ -131,7 +133,10 @@ function emitText(xml: string, start: number, end: number): string {
     const wordStart = i;
     while (i < end && !isWs(xml.charCodeAt(i))) i++;
     if (i > wordStart) {
-      out += `<span class="w" data-xml-start="${wordStart}">${xml.slice(wordStart, i)}</span>`;
+      // Render every "-" as U+2011 NON-BREAKING HYPHEN so the browser
+      // never breaks a line at a hyphen.
+      const word = xml.slice(wordStart, i).replace(/-/g, '‑');
+      out += `<span class="w" data-xml-start="${wordStart}">${word}</span>`;
     }
   }
   return out;

@@ -67,7 +67,11 @@ export default function EntryView() {
 
   return (
     <EntryShell
-      toolbar={<Breadcrumb head={head?.headword ?? null} current={focus.headword} />}
+      toolbar={<Breadcrumb
+                  head={head?.headword ?? null}
+                  current={focus.headword}
+                  headTo={head ? `/entry/${head.url_id}` : null}
+                  currentTo={`/entry/${focus.url_id}`} />}
       initialColumn={focus.starting_column}
       highlight={highlight}
       onNavigate={(id, col, y, cy) => navigate(`/entry/${id}`, { state: { targetColumn: col, targetY: y, clickY: cy } })}
