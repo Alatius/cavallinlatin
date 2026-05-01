@@ -80,6 +80,10 @@ class EntryOut(BaseModel):
     next_url_id: str | None
     updated_at: int
     lock: LockInfo | None = None
+    # Headword of the entry whose xml_id matches this entry's xml_root, used
+    # by the toolbar breadcrumb. Null for primary/proper entries (which are
+    # roots themselves) and for orphans whose root is missing.
+    root_headword: str | None = None
 
 
 class EntryList(BaseModel):
@@ -87,6 +91,41 @@ class EntryList(BaseModel):
     offset: int
     limit: int
     items: list[EntrySummary]
+
+
+class EntryGroupItem(BaseModel):
+    """A single member of an etymological group, with just the fields the
+    public group view needs to render. Drops lock/prev/next/updated_at — those
+    are editor concerns and don't apply to non-focus members in a group."""
+    url_id: str
+    xml_id: str | None
+    xml_root: str | None
+    type: EntryType
+    headword: str
+    alt_headwords: list[str] = []
+    status: Status
+    xml_body: str
+    starting_column: str | None
+
+    @classmethod
+    def from_row(cls, row) -> 'EntryGroupItem':
+        return cls(
+            url_id=row['url_id'], xml_id=row['xml_id'], xml_root=row['xml_root'],
+            type=row['type'], headword=row['headword'],
+            alt_headwords=json.loads(row['alt_headwords'] or '[]'),
+            status=row['status'], xml_body=row['xml_body'],
+            starting_column=row['starting_column'],
+        )
+
+
+class EntryGroupOut(BaseModel):
+    focus_url_id: str
+    # url_id of the head (the primary/proper entry that anchors the group),
+    # or None when the group has no head — e.g. a reference entry, an isolated
+    # plain entry, or an orphan whose root is missing from the DB.
+    head_url_id: str | None
+    # Members in document (sort_key) order. The head, if any, is items[0].
+    items: list[EntryGroupItem]
 
 
 class EntrySaveIn(BaseModel):

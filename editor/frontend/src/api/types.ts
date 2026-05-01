@@ -57,6 +57,25 @@ export interface Entry {
   next_url_id: string | null;
   updated_at: number;
   lock: LockInfo | null;
+  root_headword: string | null;
+}
+
+export interface EntryGroupItem {
+  url_id: string;
+  xml_id: string | null;
+  xml_root: string | null;
+  type: EntryType;
+  headword: string;
+  alt_headwords: string[];
+  status: Status;
+  xml_body: string;
+  starting_column: string | null;
+}
+
+export interface EntryGroup {
+  focus_url_id: string;
+  head_url_id: string | null;
+  items: EntryGroupItem[];
 }
 
 export interface EntryList {

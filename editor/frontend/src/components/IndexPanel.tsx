@@ -81,20 +81,18 @@ export default function IndexPanel({ basePath, showStatusFilter = true }: Props)
     return rows;
   }, [all, qFold, hasTextQuery, status]);
 
-  // Scroll current entry into view whenever it or the filtered list changes.
-  // Deferred a frame so Virtuoso has processed the new `data` prop — otherwise
-  // clearing a narrow filter races with Virtuoso's internal reset and the
-  // current entry ends up off-screen.
+  // Scroll current entry to the top whenever it or the filtered list changes.
+  // 100 ms delay (vs requestAnimationFrame) handles the direct URL-load case:
+  // on a fresh mount Virtuoso silently no-ops scrollIntoView until it has
+  // measured at least its initial chunk of rows, which takes a few frames.
   useEffect(() => {
     if (!currentUrlId || filtered.length === 0) return;
-    const vr = virtuosoRef.current;
-    if (!vr) return;
     const idx = filtered.findIndex((r) => r.entry.url_id === currentUrlId);
     if (idx < 0) return;
-    const raf = requestAnimationFrame(() => {
-      vr.scrollIntoView({ index: idx, align: 'center', behavior: 'auto' });
-    });
-    return () => cancelAnimationFrame(raf);
+    const t = setTimeout(() => {
+      virtuosoRef.current?.scrollIntoView({ index: idx, align: 'start', behavior: 'auto' });
+    }, 100);
+    return () => clearTimeout(t);
   }, [currentUrlId, filtered]);
 
   function onPanelKeyDown(e: React.KeyboardEvent<HTMLElement>) {

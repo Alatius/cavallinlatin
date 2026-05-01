@@ -174,13 +174,13 @@ function pickAutoHighlightTarget(
 // the given viewport Y. Both values are in the same viewport-Y coordinate
 // space, so the scroll delta is just the difference. The browser clamps
 // scrollTop to [0, max], so unreachable positions stop at the closest edge.
-function scrollAncestorToViewportY(el: HTMLElement, desiredViewportY: number) {
+export function scrollAncestorToViewportY(el: HTMLElement, desiredViewportY: number) {
   const container = findScrollableAncestor(el);
   if (!container) return;
   container.scrollTop += el.getBoundingClientRect().top - desiredViewportY;
 }
 
-function findScrollableAncestor(el: Element): HTMLElement | null {
+export function findScrollableAncestor(el: Element): HTMLElement | null {
   let p = el.parentElement;
   while (p) {
     const style = getComputedStyle(p);

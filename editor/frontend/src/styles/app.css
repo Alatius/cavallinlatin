@@ -180,9 +180,62 @@ textarea:focus {
 
 /* Public entry view */
 
-.entry-view__headword { margin: 0; font-size: 1.1em; flex: 1; }
-.entry-view__content { flex: 1; overflow: auto; padding: 0.5em 0.8em; min-width: 0; }
+.entry-view__content {
+  flex: 1;
+  overflow: auto;
+  padding: 0.5em 0.8em;
+  min-width: 0;
+  min-height: 0;
+}
+/* Trailing room below the last member so the focus-scroll can land any
+   member (including the last) flush at the top of the scrollport. We use a
+   sibling spacer rather than `padding-bottom: 100vh` on the container: with
+   box-sizing: border-box, large padding sets an implicit min on the
+   element's outer height that flex-basis/min-height: 0 can't override —
+   which inflates the scroll container by ~viewport and pushes the toolbar
+   out of view inside .entry-shell__text. A child element's height
+   contributes to scrollHeight without affecting the container's box. */
+.entry-view__bottom-spacer { height: 100vh; pointer-events: none; }
 .entry-view--error { padding: 2em; }
+/* Group members render as stacked sections separated by a clear rule. The
+   spacing + divider hangs *below* each non-last member so the focus-scroll
+   target's first line of content sits at the section's natural top, with no
+   preceding padding to push it down. (If we put the spacing above each
+   member but the first, scrolling a subentry to the top would leave its
+   content visually lower than a primary, since the primary has no preceding
+   padding.) */
+.entry-group__member {
+  margin-bottom: 1.4em;
+  padding-bottom: 1.15em;
+  border-bottom: 1px solid #b8b8c0;
+}
+
+/* Toolbar breadcrumb (shared by editor + public). Sized like a heading; head
+   and separator are dimmed so the eye lands on the current entry. */
+.entry-breadcrumb {
+  margin: 0;
+  font-size: 1.1em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  min-width: 0;
+  overflow: hidden;
+}
+.entry-breadcrumb__head {
+  color: #666;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.entry-breadcrumb__sep { color: #aaa; font-weight: 400; flex-shrink: 0; }
+.entry-breadcrumb__current {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 
 /* Editor shell: header + body row (index | main) */
 
@@ -359,7 +412,6 @@ textarea:focus {
 
 /* Entry editor */
 
-.entry-editor__headword { margin: 0; font-size: 1.1em; }
 .entry-editor__save {
   margin-left: auto;
   display: flex;

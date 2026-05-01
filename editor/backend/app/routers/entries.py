@@ -11,7 +11,8 @@ from lxml import etree
 from .. import config, db, security
 from ..deps import Conn, CurrentUser, Editor
 from ..models import (
-    ENTRY_TYPES, EntryList, EntryOut, EntrySaveIn, EntrySummary, LockInfo,
+    ENTRY_TYPES, EntryGroupItem, EntryGroupOut, EntryList, EntryOut,
+    EntrySaveIn, EntrySummary, LockInfo,
 )
 from ..text import column_markers, first_orth_y, fold, orth_texts
 from ..xml_parsing import SAFE_XML_PARSER
@@ -23,6 +24,8 @@ router = APIRouter()
 def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | None) -> EntryOut:
     # Correlated subqueries on the indexed sort_key give us prev/next in a
     # single round-trip; the planner still does index lookups, not scans.
+    # root_headword's LIMIT 1 is defensive: xml_id has no UNIQUE constraint
+    # so a duplicate (shouldn't happen) wouldn't blow up the row scalar.
     row = conn.execute(
         'SELECT e.*, u.display_name AS lock_display_name, '
         '       (SELECT url_id FROM entries '
@@ -30,7 +33,9 @@ def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | N
         '        ORDER BY sort_key DESC LIMIT 1) AS prev_url_id, '
         '       (SELECT url_id FROM entries '
         '        WHERE sort_key > e.sort_key '
-        '        ORDER BY sort_key ASC LIMIT 1) AS next_url_id '
+        '        ORDER BY sort_key ASC LIMIT 1) AS next_url_id, '
+        '       (SELECT headword FROM entries '
+        '        WHERE xml_id = e.xml_root LIMIT 1) AS root_headword '
         'FROM entries e LEFT JOIN users u ON u.id = e.lock_user_id '
         'WHERE e.url_id = ?',
         (url_id,),
@@ -56,6 +61,7 @@ def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | N
         prev_url_id=row['prev_url_id'],
         next_url_id=row['next_url_id'],
         updated_at=row['updated_at'], lock=lock,
+        root_headword=row['root_headword'],
     )
 
 
@@ -90,6 +96,58 @@ def list_entries(
     return EntryList(
         total=total, offset=offset, limit=limit,
         items=[EntrySummary.from_row(r) for r in rows],
+    )
+
+
+@router.get('/{url_id}/group', response_model=EntryGroupOut)
+def get_entry_group(url_id: str, conn: Conn):
+    """Return the etymological group containing url_id: the head (primary or
+    proper) plus all entries with the same xml_root, in document order. For
+    entries that don't belong to a group (references, isolated plain entries,
+    primaries with no derivatives) returns just the focus entry.
+    """
+    focus = conn.execute(
+        'SELECT type, xml_id, xml_root FROM entries WHERE url_id = ?',
+        (url_id,),
+    ).fetchone()
+    if not focus:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    if focus['type'] in ('primary', 'proper') and focus['xml_id']:
+        root_xml_id = focus['xml_id']
+    elif focus['xml_root']:
+        root_xml_id = focus['xml_root']
+    else:
+        root_xml_id = None
+
+    if root_xml_id is None:
+        rows = conn.execute(
+            'SELECT url_id, xml_id, xml_root, type, headword, alt_headwords, '
+            'status, xml_body, starting_column FROM entries WHERE url_id = ?',
+            (url_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            'SELECT url_id, xml_id, xml_root, type, headword, alt_headwords, '
+            'status, xml_body, starting_column FROM entries '
+            'WHERE xml_id = ? OR xml_root = ? '
+            'ORDER BY sort_key',
+            (root_xml_id, root_xml_id),
+        ).fetchall()
+
+    items = [EntryGroupItem.from_row(r) for r in rows]
+
+    # The head is items[0] iff it's a primary/proper. For orphan derivatives
+    # (root pointing to a missing entry) and pure singletons (reference, plain
+    # without root) head_url_id stays None — the breadcrumb suppresses itself.
+    head_url_id = (
+        items[0].url_id
+        if items and items[0].type in ('primary', 'proper')
+        else None
+    )
+
+    return EntryGroupOut(
+        focus_url_id=url_id, head_url_id=head_url_id, items=items,
     )
 
 

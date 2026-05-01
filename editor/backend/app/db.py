@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE INDEX IF NOT EXISTS entries_headword_sort ON entries(headword_sort);
 CREATE INDEX IF NOT EXISTS entries_status        ON entries(status);
 CREATE INDEX IF NOT EXISTS entries_sort_key      ON entries(sort_key);
+CREATE INDEX IF NOT EXISTS entries_xml_root      ON entries(xml_root);
 
 CREATE TABLE IF NOT EXISTS entry_revisions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -6,6 +6,7 @@ import { unstable_usePrompt as usePrompt, useLocation, useNavigate, useParams } 
 
 import { STATUS_LABEL_SV } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import Breadcrumb from '../components/Breadcrumb';
 import type { ColumnHighlight } from '../components/ColumnImagePanel';
 import { readEntryNavState } from '../components/entryNavState';
 import EntryHtml from '../components/EntryHtml';
@@ -195,7 +196,7 @@ export default function EntryEditor() {
 
   const toolbar = (
     <>
-      <h2 className="entry-editor__headword">{ent.entry.headword}</h2>
+      <Breadcrumb head={ent.entry.root_headword} current={ent.entry.headword} />
       <span
         className={`status-badge status-badge--${ent.status}`}
         title="Aktuell status"
