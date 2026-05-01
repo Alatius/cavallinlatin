@@ -50,6 +50,11 @@ export default function LoginPage() {
         {error && <div className="error">{error}</div>}
         <button type="submit" disabled={pending}>Logga in</button>
       </form>
+      <p className="auth-page__note">
+        Vill du bli registrerad användare och hjälpa till att korrekturläsa och redigera
+        lexikonet? Skicka ett mejl med en kort presentation till{' '}
+        <a href="mailto:johan.winge@gmail.com">johan.winge@gmail.com</a>.
+      </p>
       <p><Link to="/">Tillbaka till lexikonet</Link></p>
     </div>
   );

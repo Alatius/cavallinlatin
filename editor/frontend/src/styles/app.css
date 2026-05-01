@@ -127,6 +127,14 @@ textarea:focus {
 .auth-page label { display: block; margin: 0.8em 0; }
 .auth-page label input { display: block; width: 100%; margin-top: 0.2em; }
 .auth-page button { padding: 0.5em 1em; }
+.auth-page__note {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid #ddd;
+  color: #555;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
 
 /* App home (public landing in main area) */
 
