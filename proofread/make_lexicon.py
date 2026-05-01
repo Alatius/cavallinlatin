@@ -30,6 +30,37 @@ MIXED_PROPER_IDS = {'Aethiops', 'Aloeus', 'Eburones', 'Gergovia', 'Ocnus', 'Orea
 MARKUP_LEVELS = {'plain': 0, 'derived': 1, 'proper': 2, 'primary': 3}
 LEVEL_TO_TYPE = {v: k for k, v in MARKUP_LEVELS.items()}
 
+# Cross-reference linker: connectives that look like words but never name a
+# target entry. Stored in normalized (make_entry_id) form, so 'o.' becomes 'o'.
+_REF_SKIP_WORDS = {
+    'se', 'o', 'l', 'under', 'och', 'äfwen', 'eller', 'jfr', 'cfr',
+    'wid', 'alex', 'art',
+}
+_REF_WORD_RE = re.compile(r"[A-Za-zÀ-ɏæœÆŒ]+")
+_REF_FOREIGN_RE = re.compile(r'<foreign>(.*?)</foreign>', re.DOTALL)
+
+# Trailing-dash trimmer: peel closing tags off the end into a suffix, strip
+# whitespace/dashes from what's left, repeat. Handles "- </foreign>" and
+# interleaved cases like "- </foreign> -</sense>".
+_TRAILING_WS_RE = re.compile(r'[\s\-–—]+\Z')
+_TRAILING_CLOSE_RE = re.compile(r'</[^>]+>\Z')
+
+
+def _strip_trailing_dashes(s: str) -> str:
+    suffix = ''
+    while True:
+        new = _TRAILING_WS_RE.sub('', s)
+        if new != s:
+            s = new
+            continue
+        m = _TRAILING_CLOSE_RE.search(s)
+        if m:
+            suffix = m.group(0) + suffix
+            s = s[:m.start()]
+            continue
+        break
+    return s + suffix
+
 
 def make_entry_id(headword_html):
     """Generate an entry ID from headword HTML: strip tags, remove diacritics,
@@ -1825,6 +1856,43 @@ def convert_to_xml(html):
         elif entry['type'] in ('derived', 'plain') and last_root_id is not None:
             entry['root'] = last_root_id
 
+    # --- Build target index for cross-references ---
+    # Reference entries (e.g. "Cantio se Cano") get a <ref target="#cano">
+    # link wrapped around the first foreign-language word that resolves to
+    # an existing entry id. Words that don't resolve are left alone.
+    valid_ids = {e['entry_id'] for e in entries if e['entry_id']}
+    ref_link_count = 0
+
+    def _link_first_target(inner: str) -> tuple[str, bool]:
+        done = False
+
+        def repl(wm):
+            nonlocal done
+            if done:
+                return wm.group(0)
+            word = wm.group(0)
+            target = make_entry_id(word)
+            if not target or target in _REF_SKIP_WORDS:
+                return word
+            if target in valid_ids:
+                done = True
+                return f'<ref target="#{target}">{word}</ref>'
+            return word
+
+        return _REF_WORD_RE.sub(repl, inner), done
+
+    def _link_references(content: str) -> str:
+        nonlocal ref_link_count
+
+        def process(m):
+            nonlocal ref_link_count
+            new_inner, linked = _link_first_target(m.group(1))
+            if linked:
+                ref_link_count += 1
+            return f'<foreign>{new_inner}</foreign>'
+
+        return _REF_FOREIGN_RE.sub(process, content)
+
     # --- Pass 2: build output ---
     type_counts = defaultdict(int)
     result_parts = []
@@ -1843,7 +1911,10 @@ def convert_to_xml(html):
         if entry['has_review']:
             attrs += ' data-review=""'
 
-        result_parts.append(f'<entry{attrs}>\n{entry["content"]}</entry>')
+        content = _strip_trailing_dashes(entry['content'])
+        if entry['type'] == 'reference':
+            content = _link_references(content)
+        result_parts.append(f'<entry{attrs}>\n{content}</entry>')
         entry_count += 1
         type_counts[entry['type']] += 1
         last_end = entry['end']
@@ -1851,6 +1922,7 @@ def convert_to_xml(html):
     result_parts.append(html[last_end:])
 
     print(f"  Entry types: {dict(type_counts)}")
+    print(f"  Reference entries linked: {ref_link_count}")
 
     xml = ''.join(result_parts)
 

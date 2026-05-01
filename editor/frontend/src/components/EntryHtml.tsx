@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { entryXmlToHtml } from '../render';
 import type { ColumnHighlight } from './ColumnImagePanel';
@@ -38,7 +39,12 @@ interface Props {
 }
 
 export default function EntryHtml({ xml, initialColumn, onHighlight, autoHighlightKey, autoHighlightY, autoHighlightColumn, autoHighlightViewportY, variant = 'editor', onXmlClick }: Props) {
-  const html = useMemo(() => entryXmlToHtml(xml), [xml]);
+  const navigate = useNavigate();
+  const entryHrefPrefix = variant === 'public' ? '/entry/' : '/editor/entry/';
+  const html = useMemo(
+    () => entryXmlToHtml(xml, { entryHrefPrefix }),
+    [xml, entryHrefPrefix],
+  );
 
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -88,14 +94,25 @@ export default function EntryHtml({ xml, initialColumn, onHighlight, autoHighlig
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    const isPlainClick = (e: MouseEvent) =>
+      e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
     const onClick = (e: MouseEvent) => {
       if (!(e.target instanceof HTMLElement)) return;
+      const refLink = e.target.closest<HTMLAnchorElement>('a.ref');
+      if (refLink && isPlainClick(e)) {
+        const href = refLink.getAttribute('href');
+        if (href) {
+          e.preventDefault();
+          navigate(href);
+          return;
+        }
+      }
       const target = e.target.closest<HTMLElement>('[data-xml-start]');
       if (target) focusOn(target, undefined, true);
     };
     root.addEventListener('click', onClick);
     return () => root.removeEventListener('click', onClick);
-  }, []);
+  }, [navigate]);
 
   // The caller passes a fresh autoHighlightKey on every navigation (router
   // location key), so the deps alone gate when this re-runs — no manual

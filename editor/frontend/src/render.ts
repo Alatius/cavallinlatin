@@ -15,7 +15,7 @@ const TEI_SPAN_TAGS = new Set([
 // Every tag that legitimately appears in source XML. Unknown tags are
 // rendered as escaped text rather than executable markup.
 const ALLOWED_TAGS: ReadonlySet<string> = new Set([
-  'entry', 'sense', 'orth', 'foreign', 'form', 'cb',
+  'entry', 'sense', 'orth', 'foreign', 'form', 'cb', 'ref',
   ...TEI_SPAN_TAGS,
   'b', 'i', 'u', 'br',
 ]);
@@ -30,6 +30,7 @@ const ALLOWED_ATTRS: Record<string, ReadonlySet<string>> = {
   orth: new Set(['y']),
   cb: new Set(['n']),
   gram: new Set(['type']),
+  ref: new Set(['target']),
 };
 
 // The body alternation skips over quoted attribute values so a literal `>`
@@ -38,6 +39,7 @@ const ALLOWED_ATTRS: Record<string, ReadonlySet<string>> = {
 // catches self-close slashes that would otherwise be eaten by the body.
 const TAG_RE = /<(\/?)([A-Za-z][A-Za-z0-9]*)\b((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
 const ATTR_RE = /\b([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*"([^"]*)"/g;
+const REF_TARGET_RE = / target="([^"]*)"/;
 
 function escapeText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -59,7 +61,15 @@ function safeAttrs(tag: string, raw: string): string {
   return out;
 }
 
-export function entryXmlToHtml(xml: string): string {
+export interface RenderOptions {
+  /** URL prefix for cross-reference links, e.g. "/entry/" (public view) or
+   *  "/editor/entry/" (editor view). When omitted, <ref> targets resolve
+   *  to "/entry/<id>". */
+  entryHrefPrefix?: string;
+}
+
+export function entryXmlToHtml(xml: string, opts: RenderOptions = {}): string {
+  const hrefPrefix = opts.entryHrefPrefix ?? '/entry/';
   let out = '';
   let last = 0;
 
@@ -82,6 +92,7 @@ export function entryXmlToHtml(xml: string): string {
       if (tag === 'entry') out += '</p>';
       else if (tag === 'sense') out += '</div>';
       else if (tag === 'foreign' || tag === 'form' || TEI_SPAN_TAGS.has(tag)) out += '</span>';
+      else if (tag === 'ref') out += '</a>';
       else out += `</${tag}>`;
       continue;
     }
@@ -102,6 +113,15 @@ export function entryXmlToHtml(xml: string): string {
       out += `<span class="form" data-xml-start="${offset}"${attrs}>`;
     } else if (TEI_SPAN_TAGS.has(tag)) {
       out += `<span class="${tag}" data-xml-start="${offset}"${attrs}>`;
+    } else if (tag === 'ref') {
+      // EntryHtml intercepts clicks on a.ref and routes via react-router so
+      // navigation stays in-SPA.
+      const tgtMatch = REF_TARGET_RE.exec(attrs);
+      const raw = tgtMatch ? tgtMatch[1] : '';
+      const id = raw.startsWith('#') ? raw.slice(1) : raw;
+      const href = id ? `${hrefPrefix}${encodeURIComponent(id)}` : '';
+      const hrefAttr = href ? ` href="${escapeAttr(href)}"` : '';
+      out += `<a class="ref"${hrefAttr}>`;
     } else if (tag === 'cb') {
       // HTML5 ignores /> on custom elements; emit an explicit close tag.
       out += `<cb data-xml-start="${offset}"${attrs}></cb>`;

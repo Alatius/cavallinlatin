@@ -35,6 +35,13 @@
 .entry-render .gram     { background: #d3e8ec; color: #1d5662; }
 .entry-render .hom      { background: #ece2b0; color: #6a5718; font-weight: bold; }
 .entry-render p[type="reference"] { background: #efefef; }
+.entry-render a.ref {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+}
+.entry-render a.ref:hover { border-bottom-style: solid; }
 /* Hanging indent: the sense number pokes out to the left of the
    continuation lines, matching the dictionary tradition. */
 .entry-render .sense {
