@@ -10,7 +10,7 @@ import Breadcrumb from '../components/Breadcrumb';
 import type { ColumnHighlight } from '../components/ColumnImagePanel';
 import { readEntryNavState } from '../components/entryNavState';
 import EntryHtml from '../components/EntryHtml';
-import EntryShell from '../components/EntryShell';
+import EntryShell, { type MobileView } from '../components/EntryShell';
 import { useDebounce } from '../components/useDebounce';
 import { useHeadwords } from '../components/HeadwordsContext';
 import { useHorizontalResize } from '../components/useHorizontalResize';
@@ -18,6 +18,15 @@ import CommentsPanel from './CommentsPanel';
 import LockIndicator from './LockIndicator';
 import SaveButton from './SaveButton';
 import { useEntry } from './useEntry';
+
+const VIEW_TOGGLE: ReadonlyArray<{
+  v: MobileView; icon: string; label: string; iconClass?: string;
+}> = [
+  { v: 'xml',      icon: '</>', label: 'XML', iconClass: 'entry-editor__view-icon--code' },
+  { v: 'preview',  icon: '👁',  label: 'Förhandsvy' },
+  { v: 'image',    icon: '🖼',  label: 'Bild' },
+  { v: 'comments', icon: '💬',  label: 'Kommentarer' },
+];
 
 export default function EntryEditor() {
   const { urlId = '' } = useParams<{ urlId: string }>();
@@ -29,6 +38,19 @@ export default function EntryEditor() {
   const { patch: patchHeadword } = useHeadwords();
   const [highlight, setHighlight] = useState<ColumnHighlight | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  // Phone-only pane selector (≤720px). At wider widths the CSS shows all
+  // three panes side-by-side and ignores this. Defaults to XML each entry
+  // load — predictable and matches how a desktop user lands.
+  const [mobileView, setMobileView] = useState<MobileView>('xml');
+  useEffect(() => { setMobileView('xml'); }, [urlId]);
+
+  // Phone: picking the comments tab opens the panel (and any other view
+  // closes it). Desktop never calls this — the toolbar's own toggle owns
+  // commentsOpen there.
+  function pickMobileView(v: MobileView) {
+    setMobileView(v);
+    setCommentsOpen(v === 'comments');
+  }
 
   // Auto-open the comments panel when navigated to from the activity page.
   // Reset on entry change so a stale openComments from a previous nav
@@ -194,6 +216,12 @@ export default function EntryEditor() {
     ? `Kommentarer (${ent.comments.length})`
     : 'Kommentarer';
 
+  const saveStatus: 'saving' | 'dirty' | 'clean' =
+    ent.saving ? 'saving' : ent.dirty ? 'dirty' : 'clean';
+  const saveStatusLabel = {
+    saving: 'Sparar …', dirty: 'Osparade ändringar', clean: 'Sparat',
+  }[saveStatus];
+
   const toolbar = (
     <>
       <Breadcrumb
@@ -208,22 +236,52 @@ export default function EntryEditor() {
       >
         {STATUS_LABEL_SV[ent.status]}
       </span>
-      <button
-        type="button"
-        className={
-          'entry-editor__comments-toggle'
-          + (commentsOpen ? ' entry-editor__comments-toggle--open' : '')
-          + (ent.comments.length > 0 ? ' entry-editor__comments-toggle--has' : '')
-        }
-        onClick={() => setCommentsOpen((v) => !v)}
-        aria-expanded={commentsOpen}
+      <div
+        className="entry-editor__view-toggle"
+        role="radiogroup"
+        aria-label="Visa"
       >
-        {commentsLabel}
-      </button>
+        {VIEW_TOGGLE.map(({ v, icon, label, iconClass }) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={mobileView === v}
+            aria-label={label}
+            title={label}
+            className={
+              'entry-editor__view-toggle-btn'
+              + (mobileView === v ? ' entry-editor__view-toggle-btn--active' : '')
+            }
+            onClick={() => pickMobileView(v)}
+          >
+            <span className={iconClass} aria-hidden="true">{icon}</span>
+          </button>
+        ))}
+      </div>
       <div className="entry-editor__save">
-        <span className="entry-editor__save-state">
-          {ent.saving ? 'Sparar …' : ent.dirty ? 'Osparade ändringar' : 'Sparat'}
-        </span>
+        <button
+          type="button"
+          className={
+            'entry-editor__comments-toggle'
+            + (commentsOpen ? ' entry-editor__comments-toggle--open' : '')
+            + (ent.comments.length > 0 ? ' entry-editor__comments-toggle--has' : '')
+          }
+          onClick={() => setCommentsOpen((v) => !v)}
+          aria-expanded={commentsOpen}
+          aria-label={commentsLabel}
+        >
+          <span className="hide-on-mobile">{commentsLabel}</span>
+          <span className="show-on-mobile" aria-hidden="true">💬</span>
+        </button>
+        <span
+          className={
+            'entry-editor__save-dot'
+            + (saveStatus !== 'clean' ? ` entry-editor__save-dot--${saveStatus}` : '')
+          }
+          aria-hidden="true"
+          title={saveStatusLabel}
+        />
         <SaveButton
           dirty={ent.dirty}
           saving={ent.saving}
@@ -281,6 +339,7 @@ export default function EntryEditor() {
       toolbar={toolbar}
       initialColumn={ent.entry.starting_column}
       highlight={highlight}
+      mobileView={mobileView}
       onNavigate={(id, col, y, cy) => navigate(`/editor/entry/${id}`, { state: { targetColumn: col, targetY: y, clickY: cy } })}
     >
       <LockIndicator
@@ -293,7 +352,10 @@ export default function EntryEditor() {
           loading={ent.loadingComments}
           error={ent.commentError}
           onAdd={ent.addComment}
-          onClose={() => setCommentsOpen(false)}
+          onClose={() => {
+            setCommentsOpen(false);
+            if (mobileView === 'comments') setMobileView('xml');
+          }}
         />
       )}
       {ent.error && <div className="entry-editor__error">{ent.error}</div>}

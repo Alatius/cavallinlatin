@@ -3,6 +3,7 @@ import { Link, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { HeadwordsProvider } from '../components/HeadwordsContext';
 import IndexPanel from '../components/IndexPanel';
+import MobileSearchBar from '../public/MobileSearchBar';
 
 export default function EditorLayout() {
   const { user, logout } = useAuth();
@@ -19,7 +20,7 @@ export default function EditorLayout() {
 
   return (
     <HeadwordsProvider>
-      <div className="editor-shell">
+      <div className="editor-shell editor-shell--editor">
         <header className="editor-shell__header">
           <span className="editor-shell__user">
             {user?.display_name}
@@ -31,6 +32,7 @@ export default function EditorLayout() {
             Logga ut
           </button>
         </header>
+        <MobileSearchBar basePath="/editor/entry" />
         <div className="editor-shell__body">
           <IndexPanel basePath="/editor/entry" />
           <main className="editor-shell__main">

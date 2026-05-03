@@ -3,6 +3,7 @@ import { Link, Outlet, useMatch } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { HeadwordsProvider } from '../components/HeadwordsContext';
 import IndexPanel from '../components/IndexPanel';
+import MobileSearchBar from './MobileSearchBar';
 
 export default function PublicLayout() {
   const { user } = useAuth();
@@ -13,7 +14,7 @@ export default function PublicLayout() {
 
   return (
     <HeadwordsProvider>
-      <div className="editor-shell">
+      <div className="editor-shell editor-shell--public">
         <header className="editor-shell__header">
           <Link to="/" className="editor-shell__home">
             Cavallins latinsk-svenska lexikon
@@ -22,9 +23,12 @@ export default function PublicLayout() {
           {user ? (
             <Link to={editorDest}>Redigeringsläge</Link>
           ) : (
-            <Link to="/editor/login">Logga in som redaktör</Link>
+            <Link to="/editor/login">
+              Logga in<span className="hide-on-mobile"> som redaktör</span>
+            </Link>
           )}
         </header>
+        <MobileSearchBar basePath="/entry" />
         <div className="editor-shell__body">
           <IndexPanel basePath="/entry" showStatusFilter={false} />
           <main className="editor-shell__main">

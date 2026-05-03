@@ -431,9 +431,23 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   align-items: center;
   gap: 0.6em;
 }
-.entry-editor__save-state {
-  color: #666;
-  text-align: right;
+/* Compact dirty/saving indicator. */
+.entry-editor__save-dot {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+}
+.entry-editor__save-dot--dirty  { background: #e08a00; }
+.entry-editor__save-dot--saving {
+  background: #4a6da8;
+  animation: save-dot-pulse 900ms ease-in-out infinite;
+}
+@keyframes save-dot-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
 }
 .entry-editor__error { padding: 0.5em 1em; background: #fee; color: #c22; }
 .entry-editor__panes { flex: 1; display: flex; overflow: hidden; min-height: 0; }
@@ -738,4 +752,201 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   right: 0;
   background: rgba(220, 50, 0, 0.2);
   pointer-events: none;
+}
+
+/* Visibility helpers paired with the condensed-layout media queries below.
+   The "mobile" name is historical — for the editor the breakpoint is 1100px,
+   for the public reader 720px. The helpers behave the same in both contexts:
+   .hide-on-mobile is hidden when its host shell is condensed,
+   .show-on-mobile becomes visible. */
+.show-on-mobile { display: none; }
+
+/* Mobile search bar: hidden on desktop, shown above the entry view at narrow
+   widths. The wrapper is the dropdown's positioning context. */
+
+.mobile-search {
+  display: none;
+  position: relative;
+  padding: 0.4em 0.6em;
+  background: #f8f8fa;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  z-index: 25;
+}
+.mobile-search__input {
+  width: 100%;
+  font-size: 16px; /* prevents iOS auto-zoom on focus */
+}
+/* Anchoring/sizing on top of the shared .dropdown-menu surface: full-width
+   under the input, attached to its bottom edge, scrollable. */
+.mobile-search__results {
+  left: 0.6em;
+  right: 0.6em;
+  top: 100%;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0;
+}
+.mobile-search__item a {
+  display: block;
+  padding: 0.55em 0.8em;
+  color: inherit;
+  border-bottom: 1px solid #eee;
+}
+.mobile-search__item a:hover,
+.mobile-search__item a:focus { background: #eef; text-decoration: none; }
+.mobile-search__item--alt a { font-style: italic; padding-left: 1.6em; }
+.mobile-search__empty,
+.mobile-search__overflow {
+  padding: 0.55em 0.8em;
+  color: #888;
+  font-style: italic;
+}
+
+/* Public reader: condensed layout below 720px (phones). */
+@media (max-width: 720px) {
+  .editor-shell--public .mobile-search { display: block; }
+  .editor-shell--public .hide-on-mobile { display: none; }
+  .editor-shell--public .show-on-mobile { display: inline; }
+
+  .editor-shell--public .editor-shell__header { padding: 0.3em 0.6em; }
+  .editor-shell--public .editor-shell__home {
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  /* Hide the always-on sidebar (replaced by the search bar above) and the
+     column image panel — phone screens have no room for either. */
+  .editor-shell--public .index-panel,
+  .editor-shell--public .index-panel + .resize-handle,
+  .editor-shell--public .column-panel { display: none; }
+
+  .editor-shell--public .entry-shell { flex-direction: column; }
+
+  /* Breadcrumb: drop the parent + separator and unbold the current word so
+     the toolbar reads as a calm heading, not a hierarchy. */
+  .editor-shell--public .entry-breadcrumb__head,
+  .editor-shell--public .entry-breadcrumb__sep { display: none; }
+  .editor-shell--public .entry-breadcrumb { font-weight: normal; }
+
+  .editor-shell--public .entry-view__content { padding: 0.5em 0.6em; }
+}
+
+/* Segmented XML / Förhandsvy / Bild toggle. Hidden on desktop (all three
+   panes are visible side-by-side anyway); shown at ≤720px in the editor. */
+.entry-editor__view-toggle { display: none; }
+.entry-editor__view-toggle-btn {
+  border: 1px solid #c6c6cc;
+  background: #fff;
+  padding: 0.25em 0.55em;
+  font: inherit;
+  font-size: 1.05em;
+  line-height: 1;
+  border-radius: 0;
+  margin-left: -1px; /* collapse adjacent borders into a single seam */
+}
+.entry-editor__view-toggle-btn:first-child {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  margin-left: 0;
+}
+.entry-editor__view-toggle-btn:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+.entry-editor__view-toggle-btn--active {
+  background: #dde;
+  border-color: #559;
+  z-index: 1;
+}
+/* Stylise </> to feel like an icon rather than running text: monospace,
+   blue, slightly tighter so its visual weight matches the emoji glyphs. */
+.entry-editor__view-icon--code { color: #1a4fb5; }
+
+/* Editor: layout-level condensing below 720px (sidebar, header tighten,
+   stack panes) — same threshold as the public reader. */
+@media (max-width: 720px) {
+  .editor-shell--editor .mobile-search { display: block; }
+
+  .editor-shell--editor .editor-shell__header { padding: 0.3em 0.6em; }
+
+  .editor-shell--editor .index-panel,
+  .editor-shell--editor .index-panel + .resize-handle { display: none; }
+
+  .editor-shell--editor .entry-shell { flex-direction: column; }
+
+  /* The toggle is meaningful only when panes stack. */
+  .editor-shell--editor .entry-editor__view-toggle { display: inline-flex; }
+
+  /* Resize handle inside panes is mouse-only and meaningless when one pane
+     is shown at a time. */
+  .editor-shell--editor .entry-editor__panes > .resize-handle { display: none; }
+  .editor-shell--editor .entry-editor__code { width: 100% !important; flex: 1; }
+
+  /* The toolbar's standalone comments toggle is hidden — the segmented
+     control now owns that affordance as a 4th tab. */
+  .editor-shell--editor .entry-editor__comments-toggle { display: none; }
+
+  /* Pane visibility driven by the segmented toggle's data-mobile-view on
+     the entry-shell root. */
+  .entry-shell[data-mobile-view='xml'] .entry-editor__preview,
+  .entry-shell[data-mobile-view='xml'] .column-panel,
+  .entry-shell[data-mobile-view='xml'] .comments-panel,
+  .entry-shell[data-mobile-view='preview'] .entry-editor__code,
+  .entry-shell[data-mobile-view='preview'] .column-panel,
+  .entry-shell[data-mobile-view='preview'] .comments-panel,
+  .entry-shell[data-mobile-view='image'] .entry-editor__code,
+  .entry-shell[data-mobile-view='image'] .entry-editor__preview,
+  .entry-shell[data-mobile-view='image'] .comments-panel,
+  .entry-shell[data-mobile-view='comments'] .entry-editor__panes,
+  .entry-shell[data-mobile-view='comments'] .column-panel { display: none; }
+
+  /* Image view: shrink the text column to its toolbar (panes are hidden)
+     and let the column-panel take the rest of the height. */
+  .entry-shell[data-mobile-view='image'] .entry-shell__text { flex: 0 0 auto; }
+  .entry-shell[data-mobile-view='image'] .entry-editor__panes { display: none; }
+  /* Override the inline width set by useHorizontalResize so the panel fills
+     the viewport instead of its persisted 410px default. */
+  .entry-shell[data-mobile-view='image'] .column-panel {
+    flex: 1;
+    height: auto;
+    width: auto !important;
+  }
+
+  /* Comments view: lift the panel from its 40%-tall overlay to a full
+     pane filling the entry-shell__text below the toolbar. */
+  .entry-shell[data-mobile-view='comments'] .comments-panel {
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+    border-bottom: 0;
+  }
+}
+
+/* Editor: toolbar-only condensing below 1100px. The toolbar gets crowded
+   well before the rest of the editor stops fitting, so we collapse just the
+   toolbar (status pill → coloured border, breadcrumb head, comments label,
+   SaveButton padding) earlier — at tablet width. */
+@media (max-width: 1100px) {
+  .editor-shell--editor .hide-on-mobile { display: none; }
+  .editor-shell--editor .show-on-mobile { display: inline; }
+
+  .editor-shell--editor .entry-breadcrumb__head,
+  .editor-shell--editor .entry-breadcrumb__sep { display: none; }
+  .editor-shell--editor .entry-breadcrumb { font-weight: normal; }
+
+  .editor-shell--editor .entry-shell__toolbar .status-badge { display: none; }
+  .editor-shell--editor .entry-shell__toolbar { border-left: 4px solid transparent; }
+  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--in_progress) { border-left-color: #c80; }
+  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--approved)    { border-left-color: #2a2; }
+
+  .editor-shell--editor .save-button__primary,
+  .editor-shell--editor .save-button__caret { padding-top: 0.25em; padding-bottom: 0.25em; }
+  .editor-shell--editor .save-button__primary { padding-left: 0.6em; padding-right: 0.6em; }
 }
