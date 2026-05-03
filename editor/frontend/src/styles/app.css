@@ -150,6 +150,12 @@ textarea:focus {
 .search-page__form { display: flex; gap: 0.4em; margin-bottom: 1em; }
 .search-page__form input { min-width: 240px; flex: 1; max-width: 400px; }
 .search-page__meta { color: #666; margin: 0 0 1em; }
+.search-page__notice {
+  background: #fff8e0;
+  border-left: 3px solid #c8a000;
+  padding: 0.5em 0.75em;
+  margin: 0 0 0.75em;
+}
 .search-page__results { list-style: none; padding: 0; margin: 0; }
 .search-page__results li { padding: 0.5em 0; border-bottom: 1px solid #eee; }
 .search-page__snippet { color: #555; margin-left: 0.5em; }
@@ -773,10 +779,15 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   flex-shrink: 0;
   z-index: 25;
 }
-.mobile-search__input {
-  width: 100%;
-  font-size: 16px; /* prevents iOS auto-zoom on focus */
-}
+.mobile-search__input { width: 100%; }
+
+/* 16px is the iOS auto-zoom threshold — anything smaller triggers a zoom
+   when the user taps the field on Safari. Apply uniformly so the four
+   search inputs read the same on desktop too. */
+.app-home__lookup input,
+.search-page__form input,
+.index-panel__search,
+.mobile-search__input { font-size: 16px; }
 /* Anchoring/sizing on top of the shared .dropdown-menu surface: full-width
    under the input, attached to its bottom edge, scrollable. */
 .mobile-search__results {
@@ -829,11 +840,11 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 
   .editor-shell--public .entry-shell { flex-direction: column; }
 
-  /* Breadcrumb: drop the parent + separator and unbold the current word so
-     the toolbar reads as a calm heading, not a hierarchy. */
+  /* Breadcrumb: drop the parent + separator so the toolbar reads as a
+     single heading rather than a hierarchy. The current word keeps its
+     <h2> bold weight. */
   .editor-shell--public .entry-breadcrumb__head,
   .editor-shell--public .entry-breadcrumb__sep { display: none; }
-  .editor-shell--public .entry-breadcrumb { font-weight: normal; }
 
   .editor-shell--public .entry-view__content { padding: 0.5em 0.6em; }
 }
@@ -939,7 +950,6 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 
   .editor-shell--editor .entry-breadcrumb__head,
   .editor-shell--editor .entry-breadcrumb__sep { display: none; }
-  .editor-shell--editor .entry-breadcrumb { font-weight: normal; }
 
   .editor-shell--editor .entry-shell__toolbar .status-badge { display: none; }
   .editor-shell--editor .entry-shell__toolbar { border-left: 4px solid transparent; }

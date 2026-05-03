@@ -4,6 +4,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 import type { Status } from '../api/types';
 import { fold, useHeadwords, type FoldedEntry } from './HeadwordsContext';
+import { plural } from './plural';
 import StatusFilter from './StatusFilter';
 import { useHorizontalResize } from './useHorizontalResize';
 
@@ -134,7 +135,7 @@ export default function IndexPanel({ basePath, showStatusFilter = true }: Props)
           <input
             type="search"
             className="index-panel__search"
-            placeholder="Sök …"
+            placeholder="Sök uppslagsord …"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -147,7 +148,7 @@ export default function IndexPanel({ basePath, showStatusFilter = true }: Props)
             ? 'Laddar …'
             : (!hasTextQuery && !status)
               ? `${all.length} uppslagsord`
-              : `${filtered.length} träffar`}
+              : `${filtered.length} ${plural(filtered.length, 'träff', 'träffar')}`}
         </div>
         <div className="index-panel__list-wrap">
           <Virtuoso
@@ -174,8 +175,8 @@ export default function IndexPanel({ basePath, showStatusFilter = true }: Props)
                     {showComments && (
                       <span
                         className="index-panel__comments"
-                        title={`${entry.comment_count} kommentar${entry.comment_count === 1 ? '' : 'er'}`}
-                        aria-label={`${entry.comment_count} kommentarer`}
+                        title={`${entry.comment_count} ${plural(entry.comment_count, 'kommentar', 'kommentarer')}`}
+                        aria-label={`${entry.comment_count} ${plural(entry.comment_count, 'kommentar', 'kommentarer')}`}
                       >
                         💬
                       </span>

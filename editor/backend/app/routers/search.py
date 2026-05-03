@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from ..deps import Conn
@@ -19,6 +21,13 @@ router = APIRouter()
 # dangerouslySetInnerHTML.
 _MARK_OPEN = '\x01'
 _MARK_CLOSE = '\x02'
+
+# The dictionary treats w/v and ß/ss as orthographic equivalents (post-
+# Classical Latin practice; ß is a German typographic ligature for ss).
+# FTS5's tokenizer doesn't know that, so we expand each query token into
+# all spellings before passing it to MATCH. The cap stops a pathological
+# input (lots of w/v's plus several 'ss' runs) from blowing up the query.
+_MAX_QUERY_ALTS = 64
 
 
 @router.get('/headwords', response_model=list[EntrySummary])
@@ -44,19 +53,56 @@ def all_headwords(conn: Conn):
     return [EntrySummary.from_row(r) for r in rows]
 
 
+def _token_alts(t: str) -> list[str]:
+    """Spelling variants of a lowercase token under w↔v and ß↔ss folding.
+
+    Tracks the running product as we walk the token; on overflow we bail
+    to the original token rather than materialising 2^N strings — a query
+    of all-w/v at the 100-char Query() max would otherwise allocate 2^100.
+    """
+    pieces: list[list[str]] = []
+    n = 1
+    i = 0
+    while i < len(t):
+        c = t[i]
+        if c in ('v', 'w'):
+            pieces.append(['v', 'w']); n *= 2; i += 1
+        elif c == 'ß':
+            pieces.append(['ß', 'ss']); n *= 2; i += 1
+        elif t[i:i + 2] == 'ss':
+            pieces.append(['ss', 'ß']); n *= 2; i += 2
+        else:
+            pieces.append([c]); i += 1
+        if n > _MAX_QUERY_ALTS:
+            return [t]
+    return [''.join(p) for p in itertools.product(*pieces)]
+
+
 def _sanitize(q: str) -> str:
-    # FTS5 query: treat user input as a simple prefix phrase; quote to escape.
-    safe = q.replace('"', '').strip()
+    # FTS5 query: treat user input as a phrase prefix, expanded over the
+    # w↔v and ß↔ss spellings the dictionary uses interchangeably. Drop
+    # quotes so they can't escape our outer phrase quoting.
+    safe = q.replace('"', '').strip().lower()
     if not safe:
         return ''
-    return f'"{safe}"*'
+    words = safe.split()
+    word_alts = [_token_alts(w) for w in words]
+    # Cartesian product across words can still blow up even with each
+    # word capped — bound it before generating phrases.
+    n = 1
+    for a in word_alts:
+        n *= len(a)
+        if n > _MAX_QUERY_ALTS:
+            return f'"{safe}"*'
+    phrases = [' '.join(combo) for combo in itertools.product(*word_alts)]
+    return ' OR '.join(f'"{p}"*' for p in phrases)
 
 
 @router.get('/search', response_model=SearchOut)
 def search(
     conn: Conn,
     q: str = Query(default='', max_length=100),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=200, ge=1, le=200),
 ):
     term = _sanitize(q)
     if not term:

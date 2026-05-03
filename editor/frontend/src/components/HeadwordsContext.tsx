@@ -15,8 +15,23 @@ export interface FoldedEntry extends EntrySummary {
   alt_folds: string[]; // same length as alt_headwords
 }
 
+// Strip combining marks *except* U+0308 (diaeresis → ä, ö) and U+030A
+// (ring → å) — preserves Swedish vowel distinctions so 'kara' doesn't
+// match 'kära', while still ignoring macrons / breves so 'abavus'
+// matches 'ăbāvus'. Then w↔v and ß↔ss are folded to a single canonical
+// form because the dictionary treats them as orthographic equivalents;
+// the backend /search expansion and the Python text.fold() mirror this.
+// (Regex inlined rather than hoisted to a module const so the
+// test_contract.py contract test can extract this function body and
+// run it under node without external bindings.)
 export function fold(s: string): string {
-  return s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+  return s
+    .normalize('NFKD')
+    .replace(/(?![\u0308\u030A])\p{M}/gu, '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/w/g, 'v')
+    .replace(/ß/g, 'ss');
 }
 
 interface HeadwordsContextValue {
