@@ -17,6 +17,9 @@ import { useHorizontalResize } from '../components/useHorizontalResize';
 import CommentsPanel from './CommentsPanel';
 import LockIndicator from './LockIndicator';
 import SaveButton from './SaveButton';
+import { closeTagOnSlash } from './closeTagOnSlash';
+import EditorBottom from './EditorBottom';
+import { TEI_ATTRS, TEI_ELEMENTS } from './teiSchema';
 import { useEntry } from './useEntry';
 
 const VIEW_TOGGLE: ReadonlyArray<{
@@ -101,7 +104,18 @@ export default function EntryEditor() {
   // that case we buffer the click and replay from onCreateEditor.
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const pendingClickRef = useRef<{ offset: number; viewportY: number; focus: boolean } | null>(null);
-  const xmlExt = useMemo(() => [xmlLang(), EditorView.lineWrapping], []);
+  // autoCloseTags: false — we mark up *existing* text, so an inserted
+  // `</tag>` after the cursor lands before the content the user wants to
+  // wrap. The `</`-completion (a separate code path) stays on.
+  const xmlExt = useMemo(() => [
+    xmlLang({
+      autoCloseTags: false,
+      elements: TEI_ELEMENTS,
+      attributes: TEI_ATTRS,
+    }),
+    closeTagOnSlash,
+    EditorView.lineWrapping,
+  ], []);
 
   const applyXmlClick = useCallback((view: EditorView, offset: number, viewportY: number, focus: boolean) => {
     const pos = Math.max(0, Math.min(offset, view.state.doc.length));
@@ -302,9 +316,10 @@ export default function EntryEditor() {
           extensions={xmlExt}
           onChange={ent.setXml}
           onCreateEditor={onEditorReady}
-          basicSetup={{ lineNumbers: true, foldGutter: true }}
+          basicSetup={{ lineNumbers: true, foldGutter: true, closeBrackets: false }}
           height="100%"
         />
+        <EditorBottom editorRef={cmRef} />
       </div>
       <div
         ref={xmlPane.handleRef}

@@ -462,19 +462,88 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 
 .entry-editor__code {
   flex-shrink: 0;
-  position: relative;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   min-width: 0;
 }
-.entry-editor__code > div {
-  position: absolute;
-  inset: 0;
+.entry-editor__code > .cm-theme,
+.entry-editor__code > .cm-theme-light,
+.entry-editor__code > .cm-theme-dark {
+  flex: 1;
+  min-height: 0;
 }
 .entry-editor__code .cm-editor {
   height: 100%;
   font-size: 13px;
 }
 .entry-editor__code .cm-scroller { overflow: auto; }
+
+.editor-bottom {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.editor-bottom__panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.4em;
+  background: #fafafa;
+  border-top: 1px solid var(--border, #ddd);
+}
+.editor-bottom__panel-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border, #ccc);
+  margin: 0.1em 0.25em;
+}
+.editor-bottom__bar {
+  display: flex;
+  gap: 0.4em;
+  padding: 0.25em 0.4em;
+  border-top: 1px solid var(--border, #ddd);
+  background: var(--toolbar-bg, #f7f7f7);
+}
+.editor-bottom__toggle {
+  font: inherit;
+  font-size: 12px;
+  padding: 0.2em 0.7em;
+  border: 1px solid var(--border, #ccc);
+  background: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+  color: #333;
+}
+.editor-bottom__toggle:hover { background: #eef; }
+.editor-bottom__toggle--active {
+  background: #e7ecf7;
+  border-color: #99a2c0;
+  color: #1e3a8a;
+}
+
+.editor-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 0.18em 0.5em;
+  border: 1px solid var(--border, #ccc);
+  background: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+  color: #333;
+  line-height: 1.3;
+}
+.editor-chip:hover { background: #eef; }
+.editor-chip:active { background: #dde; }
+.editor-chip--bold { font-weight: bold; }
+.editor-chip--ul   { text-decoration: underline; }
+.editor-chip--it   { font-style: italic; }
+.editor-chip--char {
+  min-width: 1.8em;
+  text-align: center;
+  font-size: 14px;
+}
 .entry-editor__preview {
   flex: 1;
   overflow: auto;
