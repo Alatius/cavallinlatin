@@ -1,10 +1,12 @@
-import { useState } from 'react';
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import type { EditorView } from '@codemirror/view';
 import { applyForeign, applyInlineFormat, applyLatinOut } from './xmlOps';
+import { useStoredState } from '../components/useStoredState';
 
 type Props = { editorRef: React.RefObject<ReactCodeMirrorRef | null> };
 type Panel = 'tags' | 'chars';
+const isPanel = (s: string): Panel | undefined =>
+  s === 'tags' || s === 'chars' ? s : undefined;
 
 type TagItem = { tag: string; label: string; kind: 'inline' | 'latinOut' | 'foreign' };
 
@@ -111,7 +113,9 @@ function renderGroups<T>(
 }
 
 export default function EditorBottom({ editorRef }: Props) {
-  const [active, setActive] = useState<Panel | null>(null);
+  const [active, setActive] = useStoredState<Panel | null>(
+    'editorBottom.panel', null, isPanel,
+  );
 
   // onMouseDown(preventDefault) keeps focus in the editor — without it the
   // button steals focus and the selection is lost before the dispatch.

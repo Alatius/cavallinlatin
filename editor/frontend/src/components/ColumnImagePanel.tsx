@@ -76,6 +76,7 @@ export default function ColumnImagePanel({ initialColumn, highlight, onNavigate 
   const [markerY, setMarkerY] = useState(0);
   const [showMarker, setShowMarker] = useState(false);
   const [imgHeight, setImgHeight] = useState(0);
+  const [imgWidth, setImgWidth] = useState(0);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [editInvalid, setEditInvalid] = useState(false);
@@ -137,7 +138,6 @@ export default function ColumnImagePanel({ initialColumn, highlight, onNavigate 
     const img = imgRef.current;
     const container = containerRef.current;
     if (!img || !container) return;
-    setImgHeight(img.offsetHeight);
     if (showMarker) {
       const targetPx = (markerY / 100) * img.offsetHeight;
       container.scrollTop = targetPx - container.clientHeight / 4;
@@ -162,9 +162,20 @@ export default function ColumnImagePanel({ initialColumn, highlight, onNavigate 
     }
   }, [markerY, showMarker]);
 
+  // Track the image element directly: on small screens CSS media queries
+  // override the panel width (`width: auto !important` for the full-viewport
+  // overlay), so the React `width` state from useHorizontalResize goes stale
+  // and the marker stops scaling with what the user sees.
   useEffect(() => {
-    if (imgRef.current) setImgHeight(imgRef.current.offsetHeight);
-  }, [width]);
+    const img = imgRef.current;
+    if (!img || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      setImgHeight(img.offsetHeight);
+      setImgWidth(img.offsetWidth);
+    });
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [currentImage]);
 
   async function onImageClick(e: React.MouseEvent<HTMLImageElement>) {
     if (!onNavigate || !currentImage) return;
@@ -184,7 +195,7 @@ export default function ColumnImagePanel({ initialColumn, highlight, onNavigate 
     }
   }
 
-  const markerScale = width / DEFAULT_WIDTH;
+  const markerScale = imgWidth ? imgWidth / DEFAULT_WIDTH : 1;
   const markerTop = (markerY / 100) * imgHeight;
 
   return (

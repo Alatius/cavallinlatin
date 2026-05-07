@@ -172,6 +172,7 @@ export default function EntryEditor() {
 
   const xmlPane = useHorizontalResize({
     storageKey: 'xml-pane-width', initial: 500, min: 200, side: 'right',
+    proportional: true,
   });
 
   // Acquire the soft lock on FIRST edit (not on mere view) so that simply

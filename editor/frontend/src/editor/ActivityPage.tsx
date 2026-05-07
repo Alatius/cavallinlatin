@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client';
 import type { ActivityItem } from '../api/types';
+import { useStoredState } from '../components/useStoredState';
 
 type Tab = 'comments' | 'edits';
+const isTab = (s: string): Tab | undefined =>
+  s === 'comments' || s === 'edits' ? s : undefined;
 
 function formatDate(unix: number): string {
   return new Date(unix * 1000).toLocaleString('sv-SE', {
@@ -14,7 +17,7 @@ function formatDate(unix: number): string {
 }
 
 export default function ActivityPage() {
-  const [tab, setTab] = useState<Tab>('comments');
+  const [tab, setTab] = useStoredState<Tab>('activityPage.tab', 'comments', isTab);
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
