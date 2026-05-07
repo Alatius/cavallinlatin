@@ -15,23 +15,32 @@ export interface FoldedEntry extends EntrySummary {
   alt_folds: string[]; // same length as alt_headwords
 }
 
-// Strip combining marks *except* U+0308 (diaeresis → ä, ö) and U+030A
-// (ring → å) — preserves Swedish vowel distinctions so 'kara' doesn't
-// match 'kära', while still ignoring macrons / breves so 'abavus'
-// matches 'ăbāvus'. Then w↔v and ß↔ss are folded to a single canonical
-// form because the dictionary treats them as orthographic equivalents;
-// the backend /search expansion and the Python text.fold() mirror this.
+// Preserve ä, ö, å as distinct (so 'bar' doesn't match 'bär'), but
+// fold every other diacritic — macrons and breves so 'abavus' matches
+// 'ăbāvus', and ordinary diaereses so 'coepi' matches 'coëpi'. We
+// stash ä/ö/å in PUA codepoints before NFKD strips combining marks,
+// then restore them. Then w↔v, ß↔ss, æ↔ae and œ↔oe are folded because
+// the dictionary treats them as orthographic equivalents; the backend
+// /search expansion and the Python text.fold() mirror this.
 // (Regex inlined rather than hoisted to a module const so the
 // test_contract.py contract test can extract this function body and
 // run it under node without external bindings.)
 export function fold(s: string): string {
   return s
-    .normalize('NFKD')
-    .replace(/(?![\u0308\u030A])\p{M}/gu, '')
-    .normalize('NFC')
     .toLowerCase()
+    .normalize('NFC')
+    .replace(/ä/g, '\uE000')
+    .replace(/ö/g, '\uE001')
+    .replace(/å/g, '\uE002')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\uE000/g, 'ä')
+    .replace(/\uE001/g, 'ö')
+    .replace(/\uE002/g, 'å')
     .replace(/w/g, 'v')
-    .replace(/ß/g, 'ss');
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/œ/g, 'oe');
 }
 
 interface HeadwordsContextValue {

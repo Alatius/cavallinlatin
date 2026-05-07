@@ -22,11 +22,11 @@ router = APIRouter()
 _MARK_OPEN = '\x01'
 _MARK_CLOSE = '\x02'
 
-# The dictionary treats w/v and ß/ss as orthographic equivalents (post-
-# Classical Latin practice; ß is a German typographic ligature for ss).
-# FTS5's tokenizer doesn't know that, so we expand each query token into
-# all spellings before passing it to MATCH. The cap stops a pathological
-# input (lots of w/v's plus several 'ss' runs) from blowing up the query.
+# The dictionary treats w/v, ß/ss, æ/ae and œ/oe as orthographic
+# equivalents (post-Classical Latin practice; ß is a German typographic
+# ligature for ss). FTS5's tokenizer doesn't know that, so we expand
+# each query token into all spellings before passing it to MATCH. The
+# cap stops a pathological input from blowing up the query.
 _MAX_QUERY_ALTS = 64
 
 
@@ -54,7 +54,8 @@ def all_headwords(conn: Conn):
 
 
 def _token_alts(t: str) -> list[str]:
-    """Spelling variants of a lowercase token under w↔v and ß↔ss folding.
+    """Spelling variants of a lowercase token under w↔v, ß↔ss, æ↔ae and
+    œ↔oe folding.
 
     Tracks the running product as we walk the token; on overflow we bail
     to the original token rather than materialising 2^N strings — a query
@@ -69,8 +70,16 @@ def _token_alts(t: str) -> list[str]:
             pieces.append(['v', 'w']); n *= 2; i += 1
         elif c == 'ß':
             pieces.append(['ß', 'ss']); n *= 2; i += 1
+        elif c == 'æ':
+            pieces.append(['æ', 'ae']); n *= 2; i += 1
+        elif c == 'œ':
+            pieces.append(['œ', 'oe']); n *= 2; i += 1
         elif t[i:i + 2] == 'ss':
             pieces.append(['ss', 'ß']); n *= 2; i += 2
+        elif t[i:i + 2] == 'ae':
+            pieces.append(['ae', 'æ']); n *= 2; i += 2
+        elif t[i:i + 2] == 'oe':
+            pieces.append(['oe', 'œ']); n *= 2; i += 2
         else:
             pieces.append([c]); i += 1
         if n > _MAX_QUERY_ALTS:

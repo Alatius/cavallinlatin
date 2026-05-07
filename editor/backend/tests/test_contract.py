@@ -87,7 +87,9 @@ def test_status_values_array_matches_union():
 
 # Inputs span the cases the function actually encounters: ordinary ASCII,
 # uppercase, Latin macrons / breves the dictionary uses for vowel quantity,
-# Greek (a few etymology entries cite Greek), ligatures, mixed punctuation.
+# Greek (a few etymology entries cite Greek), ae/oe ligatures, ordinary
+# diaereses (which fold) vs. Swedish ä/ö/å (which don't), Swedish w (folds
+# to v), German ß, mixed punctuation.
 FOLD_SAMPLES = [
     'Abacus',
     'ĂBĂVUS',
@@ -98,6 +100,11 @@ FOLD_SAMPLES = [
     'Hīc, illīc',
     'COEPI',
     'Æquus',
+    'Œconomia',
+    'poëta',
+    'bär',
+    'Wändt',
+    'Straße',
     'Διός',
     '',
     '  spaced  ',

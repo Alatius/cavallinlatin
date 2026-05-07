@@ -10,11 +10,33 @@ if TYPE_CHECKING:
 
 
 def fold(s: str) -> str:
-    """Lowercase and strip combining marks, so 'Ăbăvus' folds to 'abavus'."""
-    return ''.join(
-        c for c in unicodedata.normalize('NFKD', s)
+    """Canonicalize for search/sort. Mirrors the TS fold() in
+    HeadwordsContext.tsx: drops macrons, breves, and ordinary diaereses
+    (so 'coepi' matches 'coëpi') but keeps the Swedish vowels ä, ö, å
+    distinct (so 'bar' doesn't match 'bär'). Then folds w↔v, ß↔ss,
+    æ↔ae and œ↔oe — orthographic equivalents in the dictionary.
+    The ä/ö/å stash trick mirrors the TS implementation: park them in
+    PUA codepoints across the NFKD step, then restore."""
+    pre = (
+        unicodedata.normalize('NFC', s.lower())
+        .replace('ä', '\uE000')
+        .replace('ö', '\uE001')
+        .replace('å', '\uE002')
+    )
+    stripped = ''.join(
+        c for c in unicodedata.normalize('NFKD', pre)
         if not unicodedata.combining(c)
-    ).lower()
+    )
+    return (
+        stripped
+        .replace('\uE000', 'ä')
+        .replace('\uE001', 'ö')
+        .replace('\uE002', 'å')
+        .replace('w', 'v')
+        .replace('ß', 'ss')
+        .replace('æ', 'ae')
+        .replace('œ', 'oe')
+    )
 
 
 def orth_texts(entry: '_Element') -> list[str]:
