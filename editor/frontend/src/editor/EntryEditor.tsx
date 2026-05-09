@@ -20,6 +20,7 @@ import SaveButton from './SaveButton';
 import { closeTagOnSlash } from './closeTagOnSlash';
 import EditorBottom from './EditorBottom';
 import { TEI_ATTRS, TEI_ELEMENTS } from './teiSchema';
+import { teiLinter } from './teiLint';
 import { useEntry } from './useEntry';
 
 const VIEW_TOGGLE: ReadonlyArray<{
@@ -114,6 +115,7 @@ export default function EntryEditor() {
       attributes: TEI_ATTRS,
     }),
     closeTagOnSlash,
+    teiLinter,
     EditorView.lineWrapping,
   ], []);
 
