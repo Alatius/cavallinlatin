@@ -1,6 +1,6 @@
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import type { EditorView } from '@codemirror/view';
-import { applyForeign, applyInlineFormat, applyLatinOut } from './xmlOps';
+import { applyTag } from './xmlOps';
 import { useStoredState } from '../components/useStoredState';
 
 type Props = { editorRef: React.RefObject<ReactCodeMirrorRef | null> };
@@ -8,35 +8,35 @@ type Panel = 'tags' | 'chars';
 const isPanel = (s: string): Panel | undefined =>
   s === 'tags' || s === 'chars' ? s : undefined;
 
-type TagItem = { tag: string; label: string; kind: 'inline' | 'latinOut' | 'foreign' };
+type TagItem = { tag: string; label: string };
 
 // Each top-level array is one visual group, separated by a vertical divider.
 const TAG_GROUPS: ReadonlyArray<ReadonlyArray<TagItem>> = [
   [
-    { tag: 'orth',    label: 'Uppslagsord',       kind: 'latinOut' },
-    { tag: 'form',    label: 'Form',              kind: 'latinOut' },
-    { tag: 'ref',     label: 'Referens',          kind: 'latinOut' },
+    { tag: 'orth',    label: 'Uppslagsord' },
+    { tag: 'form',    label: 'Form' },
+    { tag: 'ref',     label: 'Referens' },
   ],
   [
-    { tag: 'foreign', label: 'Latin',             kind: 'foreign'  },
+    { tag: 'foreign', label: 'Latin' },
   ],
   [
-    { tag: 'b',       label: 'Fet',               kind: 'inline'   },
-    { tag: 'u',       label: 'Understruken',      kind: 'inline'   },
-    { tag: 'i',       label: 'Kursiv',            kind: 'inline'   },
+    { tag: 'b',       label: 'Fet' },
+    { tag: 'u',       label: 'Understruken' },
+    { tag: 'i',       label: 'Kursiv' },
   ],
   [
-    { tag: 'pos',     label: 'Ordklass',          kind: 'latinOut' },
-    { tag: 'gen',     label: 'Genus',             kind: 'latinOut' },
-    { tag: 'subc',    label: 'Subkategorisering', kind: 'latinOut' },
-    { tag: 'case',    label: 'Kasus',             kind: 'latinOut' },
-    { tag: 'mood',    label: 'Modus',             kind: 'latinOut' },
-    { tag: 'tns',     label: 'Tempus',            kind: 'latinOut' },
-    { tag: 'number',  label: 'Numerus',           kind: 'latinOut' },
-    { tag: 'iType',   label: 'Böjningstyp',       kind: 'latinOut' },
-    { tag: 'lbl',     label: 'Etikett',           kind: 'latinOut' },
-    { tag: 'hom',     label: 'Homograf',          kind: 'latinOut' },
-    { tag: 'gram',    label: 'Grammatik',         kind: 'latinOut' },
+    { tag: 'pos',     label: 'Ordklass' },
+    { tag: 'gen',     label: 'Genus' },
+    { tag: 'subc',    label: 'Subkategorisering' },
+    { tag: 'case',    label: 'Kasus' },
+    { tag: 'mood',    label: 'Modus' },
+    { tag: 'tns',     label: 'Tempus' },
+    { tag: 'number',  label: 'Numerus' },
+    { tag: 'iType',   label: 'Böjningstyp' },
+    { tag: 'lbl',     label: 'Etikett' },
+    { tag: 'hom',     label: 'Homograf' },
+    { tag: 'gram',    label: 'Grammatik' },
   ],
 ];
 
@@ -90,12 +90,6 @@ const chipClass = (tag: string) => {
 const toggleClass = (active: boolean) =>
   `editor-bottom__toggle${active ? ' editor-bottom__toggle--active' : ''}`;
 
-function applyTag(view: EditorView, item: TagItem) {
-  if      (item.kind === 'inline')  applyInlineFormat(view, item.tag);
-  else if (item.kind === 'foreign') applyForeign(view);
-  else                              applyLatinOut(view, item.tag);
-}
-
 function insertChar(view: EditorView, ch: string) {
   view.dispatch(view.state.replaceSelection(ch));
   view.focus();
@@ -139,7 +133,7 @@ export default function EditorBottom({ editorRef }: Props) {
               type="button"
               className={chipClass(item.tag)}
               title={item.label}
-              onMouseDown={withView((v) => applyTag(v, item))}
+              onMouseDown={withView((v) => applyTag(v, item.tag))}
             >
               {item.tag}
             </button>

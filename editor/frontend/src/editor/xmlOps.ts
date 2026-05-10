@@ -5,33 +5,33 @@ import {
 import type { EditorView } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 
-// XML editing operations for the lexicon. Each operation is a `Command`-style
-// function that mutates the current selection and returns a boolean. The
-// content-tag operations (everything except b/u/i) try the rules in order:
+// XML editing operations for the lexicon. Tag-changing buttons all funnel
+// through `tagOp`, which implements one rule set:
 //
-//   0. Same-tag merge: if the selection touches or overlaps any <X>
-//      element(s) of the target tag — and the chain contains no *other*
-//      content-tag ancestor — fold them all into one <X>. Snug selection
-//      inside a sole <X> still toggles off (unwrap). Adjacent siblings,
-//      crossed boundaries, and chains of touching <X> all collapse here so
-//      we never produce nested or neighbouring duplicates.
-//   1. No content-tag ancestor      → plain wrap.
-//   2. Outermost is the same tag,
-//      snug to the selection,
-//      no nested content tags       → unwrap (toggle off).
-//   3. Outermost is the same tag,
-//      no nested content tags,
-//      not snug                     → noop.
-//   4. <foreign> in the chain AND
-//      target is a Latin-out tag    → split-and-trim foreign around selection,
-//                                      peel any non-foreign ancestors.
-//   5. Otherwise                    → replace outermost content ancestor with
-//                                      the target tag, peel any nested
-//                                      content tags inside it.
+// 1. If the selection is contained inside a same-tag X element → unwrap.
+// 2. Else if any same-tag X touches/spans the selection → merge zone (fold
+//    everything in the expanded zone into one X).
+// 3. Else for inline-format targets (b/u/i) → plain wrap.
+// 4. Else (content-tag target) find the kept container C: foreign if any
+//    ancestor is foreign, else the outermost content-tag ancestor. Peel
+//    every other content-tag ancestor (corruptly nested), then split C
+//    around the selection: wrap selection in X; wrap each side's content
+//    back in C with inline-format children (b/u/i) staying inside the C
+//    remnant and other elements (br, etc.) staying bare between wrappers;
+//    edge-trim text segments at run-edges (push non-letter chars outside
+//    C). Drop empty C remnants.
+// 5. Else (no content ancestor) → plain wrap.
 //
-// "Latin-out" is everything in CONTENT_TAGS except `foreign`. The split-and-
-// trim algorithm mirrors the script's _trim_foreign_edges (preserves word-
-// bound `-`, `.`, balanced parens at the foreign edges).
+// "Content tags" = the inventory below; they don't nest with each other.
+// Inline format (b/u/i) nests freely.
+
+const CONTENT_TAGS: ReadonlySet<string> = new Set([
+  'foreign', 'orth', 'ref', 'form',
+  'pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',
+  'iType', 'gram', 'lbl', 'hom',
+]);
+
+const INLINE_FORMAT_SET: ReadonlySet<string> = new Set(['b', 'u', 'i']);
 
 // "Foreign letter" matches the script's _is_foreign_letter (any alpha except
 // the ɔ used as an editorial reverse-c).
@@ -39,15 +39,19 @@ const LETTER_RE = /\p{L}/u;
 const isLetter = (c: string) => c.length > 0 && c !== 'ɔ' && LETTER_RE.test(c);
 const isLetterOrDigit = (c: string) => isLetter(c) || (c >= '0' && c <= '9');
 
+function hasLetters(s: string): boolean {
+  for (const c of s) if (isLetter(c)) return true;
+  return false;
+}
+
+// Edge-trim helpers. Mirror the script's _trim_foreign_edges: keep word-
+// bound `-`, `.`, balanced `()` adjacent to letters; push everything else
+// out of the wrapper.
 function hasMatchingClose(s: string, pos: number): boolean {
   let depth = 0;
   for (let i = pos; i < s.length; i++) {
-    const c = s[i];
-    if (c === '(') depth++;
-    else if (c === ')') {
-      depth--;
-      if (depth === 0) return true;
-    }
+    if (s[i] === '(') depth++;
+    else if (s[i] === ')') { depth--; if (depth === 0) return true; }
   }
   return false;
 }
@@ -55,61 +59,46 @@ function hasMatchingClose(s: string, pos: number): boolean {
 function hasMatchingOpen(s: string, pos: number, minPos: number): boolean {
   let depth = 0;
   for (let i = pos; i >= minPos; i--) {
+    if (s[i] === ')') depth++;
+    else if (s[i] === '(') { depth--; if (depth === 0) return true; }
+  }
+  return false;
+}
+
+function leftTrim(s: string): number {
+  let i = 0;
+  while (i < s.length) {
     const c = s[i];
-    if (c === ')') depth++;
-    else if (c === '(') {
-      depth--;
-      if (depth === 0) return true;
-    }
-  }
-  return false;
-}
-
-// Cut points for trimming non-letter chars from the edges of a foreign
-// fragment. Returns [left, right] such that s.slice(left, right) is the
-// text that stays inside <foreign>; everything outside gets pushed out.
-function trimEdges(s: string): [number, number] {
-  let left = 0;
-  while (left < s.length) {
-    const c = s[left];
     if (isLetter(c)) break;
-    if (c === '-' && left + 1 < s.length && isLetter(s[left + 1])) break;
-    if (c === '(' && hasMatchingClose(s, left)) break;
-    left++;
+    if (c === '-' && i + 1 < s.length && isLetter(s[i + 1])) break;
+    if (c === '(' && hasMatchingClose(s, i)) break;
+    i++;
   }
-  let right = s.length;
-  while (right > left) {
-    const c = s[right - 1];
+  return i;
+}
+
+function rightTrim(s: string, minPos: number): number {
+  let i = s.length;
+  while (i > minPos) {
+    const c = s[i - 1];
     if (isLetter(c) || (c >= '0' && c <= '9')) break;
-    if (c === '-' && right - 2 >= 0 && isLetter(s[right - 2])) break;
-    if (c === '.' && right - 2 >= 0 && isLetterOrDigit(s[right - 2])) break;
-    if (c === ')' && hasMatchingOpen(s, right - 1, left)) break;
-    right--;
+    if (c === '-' && i - 2 >= minPos && isLetter(s[i - 2])) break;
+    if (c === '.' && i - 2 >= minPos && isLetterOrDigit(s[i - 2])) break;
+    if (c === ')' && hasMatchingOpen(s, i - 1, minPos)) break;
+    i--;
   }
-  return [left, right];
+  return i;
 }
-
-function hasLetters(s: string): boolean {
-  for (const c of s) if (isLetter(c)) return true;
-  return false;
-}
-
-// The set of "content tags" that don't nest with each other. Inline format
-// (b, u, i) is intentionally excluded — those nest freely.
-const CONTENT_TAGS: ReadonlySet<string> = new Set([
-  'foreign', 'orth', 'ref', 'form',
-  'pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',
-  'iType', 'gram', 'lbl', 'hom',
-]);
 
 type Enclosing = {
   name: string;
   outerFrom: number; outerTo: number;
   innerFrom: number; innerTo: number;
+  node: SyntaxNode;
 };
 
-// Reads the tag name and inner/outer bounds off an `Element` syntax node,
-// or returns null for self-closing or otherwise malformed elements.
+// Reads the tag name and inner/outer bounds off an `Element` syntax node.
+// Returns null for self-closing or otherwise malformed elements.
 function readElement(state: EditorState, node: SyntaxNode): Enclosing | null {
   if (node.name !== 'Element') return null;
   const openTag = node.firstChild;
@@ -120,10 +109,11 @@ function readElement(state: EditorState, node: SyntaxNode): Enclosing | null {
     name: state.doc.sliceString(tagNameNode.from, tagNameNode.to),
     outerFrom: node.from, outerTo: node.to,
     innerFrom: openTag.to, innerTo: closeTag.from,
+    node,
   };
 }
 
-// Walks innermost-first up the syntax tree from `from`, yielding every
+// Walks innermost-first up the syntax tree from `from`, collecting every
 // content-tag Element whose content range covers [from, to].
 function findContentAncestors(
   state: EditorState, from: number, to: number,
@@ -140,35 +130,13 @@ function findContentAncestors(
   return result;
 }
 
-// Open- and close-tag ranges of every content-tag Element strictly inside
-// [innerFrom, innerTo] — i.e. the deletion ranges to peel them.
-function findInnerContentTagRanges(
-  state: EditorState, innerFrom: number, innerTo: number,
-): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  syntaxTree(state).iterate({
-    from: innerFrom,
-    to: innerTo,
-    enter(n) {
-      if (n.from < innerFrom || n.to > innerTo) return;
-      const el = readElement(state, n.node);
-      if (!el || !CONTENT_TAGS.has(el.name)) return;
-      // openTag = [outerFrom, innerFrom); closeTag = [innerTo, outerTo).
-      ranges.push({ from: el.outerFrom, to: el.innerFrom });
-      ranges.push({ from: el.innerTo,   to: el.outerTo   });
-    },
-  });
-  return ranges;
-}
-
-// Every `name`-tagged Element whose outer range touches or overlaps
-// [from, to]. Touch: outerTo===from or outerFrom===to. Overlap: standard.
+// Every `name`-tagged Element whose outer range touches or overlaps [from, to].
+// Touch: outerTo===from or outerFrom===to. Overlap: standard.
 function findElementsByNameNear(
   state: EditorState, from: number, to: number, name: string,
 ): Enclosing[] {
   const result: Enclosing[] = [];
-  // Iterate one char beyond each side so adjacent elements (whose extent
-  // is just outside [from, to]) get visited.
+  // Iterate one char beyond each side so adjacent elements get visited.
   syntaxTree(state).iterate({
     from: Math.max(0, from - 1),
     to:   Math.min(state.doc.length, to + 1),
@@ -183,11 +151,7 @@ function findElementsByNameNear(
 }
 
 // Iteratively expand [fromInit, toInit] to cover every X element that
-// touches or overlaps the current zone. Stops at a fixed point. After
-// each expansion the new boundary may itself be adjacent to *another*
-// X element that wasn't visible from the original window (e.g. a chain
-// of three adjacent <foreign> blocks where the outermost is reached only
-// after the middle one has been included).
+// touches or overlaps the current zone. Stops at a fixed point.
 function expandMergeZone(
   state: EditorState, fromInit: number, toInit: number, X: string,
 ): { from: number; to: number } {
@@ -218,7 +182,6 @@ function stripTagsByName(
       ranges.push({ from: el.innerTo,   to: el.outerTo   });
     },
   });
-  ranges.sort((a, b) => a.from - b.from);
   let out = '';
   let pos = from;
   for (const r of ranges) {
@@ -229,10 +192,8 @@ function stripTagsByName(
   return out;
 }
 
-const INLINE_FORMAT_SET: ReadonlySet<string> = new Set(['b', 'u', 'i']);
-
 // Refuse a merge that would smuggle a non-formatting tag into a content
-// wrapper (e.g. a cross-<sense> merge of two foreigns). Inline format
+// wrapper (e.g. cross-<sense> merge of two foreigns). Inline format
 // targets (b/u/i) accept anything inside, so always safe.
 function isMergeSafe(inner: string, X: string): boolean {
   if (INLINE_FORMAT_SET.has(X)) return true;
@@ -243,30 +204,6 @@ function isMergeSafe(inner: string, X: string): boolean {
   }
   return true;
 }
-
-function sameTagMergeOrToggle(
-  state: EditorState, range: SelectionRange, X: string, xTouching: Enclosing[],
-): Wrap | null {
-  // Selection fully inside a sole X: snug-unwrap or noop. Anything else
-  // (multiple X, or selection extending past one) falls through to merge.
-  if (xTouching.length === 1) {
-    const sole = xTouching[0];
-    if (sole.innerFrom <= range.from && range.to <= sole.innerTo) {
-      return isSnug(sole, range) ? unwrapElement(state, sole, range) : null;
-    }
-  }
-  const { from, to } = expandMergeZone(state, range.from, range.to, X);
-  const inner = stripTagsByName(state, from, to, X);
-  if (!isMergeSafe(inner, X)) return null;
-  const open = `<${X}>`;
-  const close = `</${X}>`;
-  return {
-    changes: { from, to, insert: open + inner + close },
-    selection: EditorSelection.range(from + open.length, from + open.length + inner.length),
-  };
-}
-
-// --- Wrap construction ---
 
 type Wrap = { changes: ChangeSpec; selection: SelectionRange };
 
@@ -282,10 +219,6 @@ function plainWrap(from: number, to: number, tag: string): Wrap {
   };
 }
 
-function isSnug(enc: Enclosing, range: SelectionRange): boolean {
-  return enc.innerFrom === range.from && enc.innerTo === range.to;
-}
-
 function unwrapElement(state: EditorState, enc: Enclosing, range: SelectionRange): Wrap {
   const inner = state.doc.sliceString(enc.innerFrom, enc.innerTo);
   const shift = enc.outerFrom - enc.innerFrom;
@@ -295,207 +228,214 @@ function unwrapElement(state: EditorState, enc: Enclosing, range: SelectionRange
   };
 }
 
-// Replace the outermost content ancestor's tag with `<X>`, and remove the
-// open/close tags of any content-tag elements nested inside it (peel). Their
-// text content remains in place. Selection lands on the new inner content
-// range — coarse but predictable; user can refine.
-function replaceWithPeel(
-  state: EditorState, X: string, outermost: Enclosing,
-): Wrap {
-  const innerTagRanges = findInnerContentTagRanges(
-    state, outermost.innerFrom, outermost.innerTo,
-  );
-  // Build the new inner content by stitching slices around the removed tags.
-  innerTagRanges.sort((a, b) => a.from - b.from);
-  let newInner = '';
-  let pos = outermost.innerFrom;
-  for (const r of innerTagRanges) {
-    newInner += state.doc.sliceString(pos, r.from);
-    pos = r.to;
-  }
-  newInner += state.doc.sliceString(pos, outermost.innerTo);
+// One side of an extract is a list of these. 'text' segments get edge-
+// trimmed at run boundaries; 'inline' segments stay inside the C remnant;
+// 'opaque' segments are bare between C remnants (i.e. they split a side
+// into multiple runs).
+type Segment = { kind: 'text' | 'inline' | 'opaque'; text: string };
 
-  const open = `<${X}>`;
-  const close = `</${X}>`;
-  const replacement = open + newInner + close;
-  const newInnerFrom = outermost.outerFrom + open.length;
-  return {
-    changes: { from: outermost.outerFrom, to: outermost.outerTo, insert: replacement },
-    selection: EditorSelection.range(newInnerFrom, newInnerFrom + newInner.length),
-  };
+// Walk `parentNode`'s direct children within [sliceFrom, sliceTo], producing
+// segments. Inner content-tag children are peeled (recursively flattened
+// into their own children's segments). Returns null if the slice cuts
+// through an inline/opaque child — that case is unsupported.
+function collectSegments(
+  state: EditorState, parentNode: SyntaxNode, sliceFrom: number, sliceTo: number,
+): Segment[] | null {
+  if (sliceFrom >= sliceTo) return [];
+  const segs: Segment[] = [];
+  let cursor = sliceFrom;
+  for (let child = parentNode.firstChild; child; child = child.nextSibling) {
+    // The parent's own tag wrappers — outside [innerFrom, innerTo] anyway.
+    if (child.name === 'OpenTag' || child.name === 'CloseTag' || child.name === 'SelfClosingTag') continue;
+    if (child.to <= sliceFrom) continue;
+    if (child.from >= sliceTo) break;
+    const isTextLike = child.name === 'Text'
+      || child.name === 'EntityReference'
+      || child.name === 'CharacterReference';
+    if (isTextLike) {
+      const a = Math.max(child.from, sliceFrom);
+      const b = Math.min(child.to, sliceTo);
+      if (cursor < a) segs.push({ kind: 'text', text: state.doc.sliceString(cursor, a) });
+      segs.push({ kind: 'text', text: state.doc.sliceString(a, b) });
+      cursor = b;
+      continue;
+    }
+    const childEl = readElement(state, child);
+    if (childEl !== null && CONTENT_TAGS.has(childEl.name)) {
+      // Sibling content tag (wholly inside slice) — preserve verbatim so
+      // we don't rip apart unrelated structure.
+      if (child.from >= sliceFrom && child.to <= sliceTo) {
+        if (cursor < child.from) segs.push({ kind: 'text', text: state.doc.sliceString(cursor, child.from) });
+        segs.push({ kind: 'opaque', text: state.doc.sliceString(child.from, child.to) });
+        cursor = child.to;
+        continue;
+      }
+      // Slice cuts through a content-tag ancestor (e.g.
+      // `<foreign><ref>[x]</ref></foreign>`) — peel by recursing into it.
+      const childFrom = Math.max(child.from, sliceFrom);
+      if (cursor < childFrom) segs.push({ kind: 'text', text: state.doc.sliceString(cursor, childFrom) });
+      const innerFrom = Math.max(childEl.innerFrom, sliceFrom);
+      const innerTo   = Math.min(childEl.innerTo,   sliceTo);
+      const inner = collectSegments(state, child, innerFrom, innerTo);
+      if (inner === null) return null;
+      segs.push(...inner);
+      cursor = Math.min(child.to, sliceTo);
+      continue;
+    }
+    // Inline format / other element / self-closing — must sit wholly in slice.
+    if (child.from < sliceFrom || child.to > sliceTo) return null;
+    if (cursor < child.from) segs.push({ kind: 'text', text: state.doc.sliceString(cursor, child.from) });
+    const isInline = childEl !== null && INLINE_FORMAT_SET.has(childEl.name);
+    segs.push({
+      kind: isInline ? 'inline' : 'opaque',
+      text: state.doc.sliceString(child.from, child.to),
+    });
+    cursor = child.to;
+  }
+  if (cursor < sliceTo) segs.push({ kind: 'text', text: state.doc.sliceString(cursor, sliceTo) });
+  // Coalesce adjacent text segments and drop empties.
+  const out: Segment[] = [];
+  for (const s of segs) {
+    if (s.text === '') continue;
+    const last = out[out.length - 1];
+    if (last && last.kind === 'text' && s.kind === 'text') last.text += s.text;
+    else out.push(s);
+  }
+  return out;
 }
 
-// Foreign-extract path: split-and-trim the (innermost) <foreign>, wrap the
-// selection in <X>, and peel any non-foreign content ancestors that wrap it.
-function foreignExtractWithPeel(
+// A "run" is a maximal stretch of text+inline segments. Opaque segments
+// split a side into multiple runs. Each run gets wrapped in <C>...</C> if
+// its body has letters; non-letter chars at the run's leading/trailing
+// edges are pushed outside the wrapper.
+function renderRun(run: Segment[], C: string): string {
+  if (run.length === 0) return '';
+  let outerLeft = '';
+  let outerRight = '';
+  let body = '';
+  for (let i = 0; i < run.length; i++) {
+    const seg = run[i];
+    if (seg.kind !== 'text') { body += seg.text; continue; }
+    const isFirst = i === 0;
+    const isLast  = i === run.length - 1;
+    const s = seg.text;
+    let l = 0;
+    let r = s.length;
+    if (isFirst) {
+      l = leftTrim(s);
+      outerLeft = s.slice(0, l);
+    }
+    if (isLast) {
+      r = rightTrim(s, l);
+      outerRight = s.slice(r);
+    }
+    body += s.slice(l, r);
+  }
+  if (!hasLetters(body)) return outerLeft + body + outerRight;
+  return `${outerLeft}<${C}>${body}</${C}>${outerRight}`;
+}
+
+function renderSide(segs: Segment[], C: string): string {
+  let out = '';
+  let run: Segment[] = [];
+  for (const seg of segs) {
+    if (seg.kind === 'opaque') {
+      out += renderRun(run, C);
+      out += seg.text;
+      run = [];
+    } else {
+      run.push(seg);
+    }
+  }
+  out += renderRun(run, C);
+  return out;
+}
+
+export function tagOp(
   state: EditorState, range: SelectionRange, X: string,
-  ancestors: Enclosing[],
 ): Wrap | null {
-  if (range.empty) return null;
-  // Innermost foreign — closest to the selection.
-  const foreign = ancestors.find((a) => a.name === 'foreign');
-  if (!foreign) return null;
+  // 1. If the selection is contained in a single same-tag X → unwrap.
+  const xTouching = findElementsByNameNear(state, range.from, range.to, X);
+  for (const x of xTouching) {
+    if (x.innerFrom <= range.from && range.to <= x.innerTo) {
+      return unwrapElement(state, x, range);
+    }
+  }
 
-  // Compute the foreign-replacement string (replaces foreign.outer). Each
-  // half (text before / after selection within the foreign) gets trimmed on
-  // BOTH edges: chars at the foreign's outer edge are pushed out as plain
-  // text just like chars next to the new <X>. Trace for
-  // <foreign>(apple, orange)</foreign> select `apple`:
-  //   beforeRaw = "(",          trim → outerLeft="(", keep="",     outerRight=""
-  //   afterRaw  = ", orange)",  trim → outerLeft=", ", keep="orange", outerRight=")"
-  // ⇒ "(<orth>apple</orth>, <foreign>orange</foreign>)"
-  const beforeRaw = state.doc.sliceString(foreign.innerFrom, range.from);
-  const middle    = state.doc.sliceString(range.from, range.to);
-  const afterRaw  = state.doc.sliceString(range.to, foreign.innerTo);
-  const [bLeft, bRight] = trimEdges(beforeRaw);
-  const [aLeft, aRight] = trimEdges(afterRaw);
-  const beforeOuterLeft  = beforeRaw.slice(0, bLeft);
-  const beforeKeep       = beforeRaw.slice(bLeft, bRight);
-  const beforeOuterRight = beforeRaw.slice(bRight);
-  const afterOuterLeft   = afterRaw.slice(0, aLeft);
-  const afterKeep        = afterRaw.slice(aLeft, aRight);
-  const afterOuterRight  = afterRaw.slice(aRight);
-  const leftFragment  = hasLetters(beforeKeep) ? `<foreign>${beforeKeep}</foreign>` : beforeKeep;
-  const rightFragment = hasLetters(afterKeep)  ? `<foreign>${afterKeep}</foreign>`  : afterKeep;
-  const wrappedOpen  = `<${X}>`;
-  const wrappedClose = `</${X}>`;
-  const foreignReplacement =
-    beforeOuterLeft + leftFragment + beforeOuterRight
-    + wrappedOpen + middle + wrappedClose
-    + afterOuterLeft + rightFragment + afterOuterRight;
-
-  // Position of the new <X> content within foreignReplacement, measured
-  // from the start of the inserted string.
-  const selOffset = beforeOuterLeft.length + leftFragment.length + beforeOuterRight.length + wrappedOpen.length;
-
-  // Single foreign ancestor, no peeling — same as the simple split case.
-  if (ancestors.length === 1) {
-    const selStart = foreign.outerFrom + selOffset;
+  // 2. Any same-tag X touching → merge zone.
+  if (xTouching.length > 0) {
+    const { from, to } = expandMergeZone(state, range.from, range.to, X);
+    const inner = stripTagsByName(state, from, to, X);
+    if (!isMergeSafe(inner, X)) return null;
+    const open = `<${X}>`;
+    const close = `</${X}>`;
     return {
-      changes: { from: foreign.outerFrom, to: foreign.outerTo, insert: foreignReplacement },
-      selection: EditorSelection.range(selStart, selStart + middle.length),
+      changes: { from, to, insert: open + inner + close },
+      selection: EditorSelection.range(from + open.length, from + open.length + inner.length),
     };
   }
 
-  // Multiple ancestors: replace the chosen foreign with the extract result,
-  // and peel every *other* content ancestor — including any outer
-  // (corruptly-nested) <foreign> wrappers.
+  // 3. Inline-format target → plain wrap (inline format nests freely).
+  if (INLINE_FORMAT_SET.has(X)) {
+    if (range.empty) return null;
+    return plainWrap(range.from, range.to, X);
+  }
+
+  // 4. Content-tag target with an ancestor → extract.
+  const ancestors = findContentAncestors(state, range.from, range.to);
+  if (ancestors.length === 0) {
+    if (range.empty) return null;
+    return plainWrap(range.from, range.to, X);
+  }
+
+  const foreign = ancestors.find((a) => a.name === 'foreign');
+  const C = foreign ?? ancestors[ancestors.length - 1];
+
+  const beforeSegs = collectSegments(state, C.node, C.innerFrom, range.from);
+  const afterSegs  = collectSegments(state, C.node, range.to, C.innerTo);
+  if (beforeSegs === null || afterSegs === null) return null;
+
+  const middle = state.doc.sliceString(range.from, range.to);
+  const beforeRendered = renderSide(beforeSegs, C.name);
+  const afterRendered  = renderSide(afterSegs,  C.name);
+  const wrappedOpen  = `<${X}>`;
+  const wrappedClose = `</${X}>`;
+  const replacement = beforeRendered + wrappedOpen + middle + wrappedClose + afterRendered;
+  const selOffset = beforeRendered.length + wrappedOpen.length;
+
+  // Build changes: replace C, plus peel any outside-C content-tag ancestors.
+  // Inside-C ancestors are already peeled by collectSegments via recursion.
   const changes: ChangeSpec[] = [
-    { from: foreign.outerFrom, to: foreign.outerTo, insert: foreignReplacement },
+    { from: C.outerFrom, to: C.outerTo, insert: replacement },
   ];
   for (const a of ancestors) {
-    if (a === foreign) continue;
-    changes.push({ from: a.outerFrom, to: a.innerFrom });   // open tag
-    changes.push({ from: a.innerTo, to: a.outerTo });        // close tag
+    if (a === C) continue;
+    if (a.outerFrom < C.outerFrom || a.outerTo > C.outerTo) {
+      changes.push({ from: a.outerFrom, to: a.innerFrom });
+      changes.push({ from: a.innerTo,   to: a.outerTo   });
+    }
   }
-  // Position the selection on the new <X> content. mapPos(foreign.outerFrom)
-  // with default assoc (-1) lands at the LEFT side of the foreign-replace —
-  // i.e. the position right where the inserted foreignReplacement begins.
-  // (assoc=1 would land at the *end* of the insertion, which we don't want.)
-  // Deletions of ancestor open tags before foreign.outerFrom shift this
-  // value left automatically.
-  const changeSet = state.changes(changes);
-  const newForeignStart = changeSet.mapPos(foreign.outerFrom);
-  const selStart = newForeignStart + selOffset;
+
+  const selStart = state.changes(changes).mapPos(C.outerFrom) + selOffset;
   return {
     changes,
     selection: EditorSelection.range(selStart, selStart + middle.length),
   };
 }
 
-// Unified content-tag operation: foreign + every Latin-out tag.
-function contentTagOp(
-  state: EditorState, range: SelectionRange, X: string,
-): Wrap | null {
-  const ancestors = findContentAncestors(state, range.from, range.to);
-  const xTouching = findElementsByNameNear(state, range.from, range.to, X);
-
-  // Same-tag merge / toggle wins when the chain has no *other* content tag.
-  // With another content tag in the chain (e.g. <orth><foreign>x</foreign></orth>
-  // clicking foreign), fall through to replace-and-peel so the orth gets
-  // properly unwrapped instead of leaving an orth around bare text.
-  if (xTouching.length >= 1 && !ancestors.some((a) => a.name !== X)) {
-    return sameTagMergeOrToggle(state, range, X, xTouching);
-  }
-
-  if (ancestors.length === 0) {
-    if (range.empty) return null;
-    return plainWrap(range.from, range.to, X);
-  }
-
-  const outermost = ancestors[ancestors.length - 1];
-
-  // Defensive fallback for the same-tag-only chain — should already have
-  // been handled by the merge branch above.
-  if (ancestors.length === 1 && outermost.name === X) {
-    return isSnug(outermost, range) ? unwrapElement(state, outermost, range) : null;
-  }
-
-  if (X !== 'foreign' && ancestors.some((a) => a.name === 'foreign')) {
-    return foreignExtractWithPeel(state, range, X, ancestors);
-  }
-  return replaceWithPeel(state, X, outermost);
-}
-
-// Inline formatting (b, u, i): toggle on the same tag, no nesting rule.
-// Uses the same merge logic as content tags so adjacent <b><b> get folded
-// into one when the selection bridges them.
-function inlineFormatOp(
-  state: EditorState, range: SelectionRange, tag: string,
-): Wrap | null {
-  const xTouching = findElementsByNameNear(state, range.from, range.to, tag);
-  if (xTouching.length >= 1) {
-    return sameTagMergeOrToggle(state, range, tag, xTouching);
-  }
-  if (range.empty) return null;
-  return plainWrap(range.from, range.to, tag);
-}
-
-// --- Public commands ---
-
-function runOp(
-  view: EditorView,
-  op: (state: EditorState, range: SelectionRange) => Wrap | null,
-): boolean {
+export function applyTag(view: EditorView, tag: string): boolean {
   const { state } = view;
-  const wraps: (Wrap | null)[] = state.selection.ranges.map((r) => op(state, r));
+  const ranges = state.selection.ranges;
+  const wraps = ranges.map((r) => tagOp(state, r, tag));
   if (wraps.every((w) => w === null)) return false;
-  const allChanges: ChangeSpec[] = [];
-  const newRanges: SelectionRange[] = [];
-  for (let i = 0; i < wraps.length; i++) {
-    const w = wraps[i];
-    if (w) {
-      allChanges.push(w.changes);
-      newRanges.push(w.selection);
-    } else {
-      newRanges.push(state.selection.ranges[i]);
-    }
-  }
   view.dispatch({
-    changes: allChanges,
-    selection: EditorSelection.create(newRanges, state.selection.mainIndex),
+    changes: wraps.flatMap((w) => w ? [w.changes] : []),
+    selection: EditorSelection.create(
+      wraps.map((w, i) => w?.selection ?? ranges[i]),
+      state.selection.mainIndex,
+    ),
     scrollIntoView: true,
   });
   view.focus();
   return true;
-}
-
-export const LATIN_OUT_TAGS = [
-  'orth', 'ref', 'form',
-  'pos', 'gen', 'subc', 'case', 'mood', 'tns', 'number',
-  'iType', 'gram', 'lbl', 'hom',
-] as const;
-
-export const INLINE_FORMAT_TAGS = ['b', 'u', 'i'] as const;
-
-export function applyLatinOut(view: EditorView, tag: string): boolean {
-  return runOp(view, (state, range) => contentTagOp(state, range, tag));
-}
-
-export function applyInlineFormat(view: EditorView, tag: string): boolean {
-  return runOp(view, (state, range) => inlineFormatOp(state, range, tag));
-}
-
-export function applyForeign(view: EditorView): boolean {
-  return runOp(view, (state, range) => contentTagOp(state, range, 'foreign'));
 }
