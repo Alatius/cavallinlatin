@@ -289,6 +289,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
+  border-radius: 0;
   padding: 0.4em 0.8em;
   font: inherit;
   cursor: pointer;
@@ -924,6 +925,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .entry-editor__view-toggle-btn {
   border: 1px solid #c6c6cc;
   background: #fff;
+  color: #222;
+  text-decoration: none;
   padding: 0.25em 0.55em;
   font: inherit;
   font-size: 1.05em;
@@ -931,6 +934,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   border-radius: 0;
   margin-left: -1px; /* collapse adjacent borders into a single seam */
 }
+a.entry-editor__view-toggle-btn:hover { text-decoration: none; background: #fafafd; }
 .entry-editor__view-toggle-btn:first-child {
   border-top-left-radius: 4px;
   border-bottom-left-radius: 4px;
@@ -972,6 +976,9 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   /* The toolbar's standalone comments toggle is hidden — the segmented
      control now owns that affordance as a 4th tab. */
   .editor-shell--editor .entry-editor__comments-toggle { display: none; }
+
+  /* Same idea for Historik — the toggle bar holds the icon at this width. */
+  .editor-shell--editor .entry-editor__history-link { display: none; }
 
   /* Pane visibility driven by the segmented toggle's data-mobile-view on
      the entry-shell root. */
@@ -1028,4 +1035,232 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   .editor-shell--editor .save-button__primary,
   .editor-shell--editor .save-button__caret { padding-top: 0.25em; padding-bottom: 0.25em; }
   .editor-shell--editor .save-button__primary { padding-left: 0.6em; padding-right: 0.6em; }
+}
+
+/* History toolbar link: matches the comments-toggle button look so it sits
+   alongside it as a peer affordance. */
+
+.entry-editor__history-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.3em 0.9em;
+  background: #fff;
+  color: #222;
+  border: 1px solid #c6c6cc;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 80ms ease;
+}
+.entry-editor__history-link:hover { background: #fafafd; text-decoration: none; }
+.entry-editor__history-link:active { background: #eef0f5; }
+
+/* Activity page: link version of the revision count. Inherits the muted
+   colour and only underlines on hover so it looks like quiet metadata. */
+.activity-page__count--link { color: #889; text-decoration: none; }
+.activity-page__count--link:hover { color: #1a4fb5; text-decoration: underline; }
+
+/* Entry history page */
+
+.entry-history {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.entry-history__toolbar {
+  display: flex;
+  gap: 0.8em;
+  align-items: center;
+  min-height: 2.8em;
+  padding: 0.3em 0.8em;
+  background: #f8f8fa;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.entry-history__title {
+  font-weight: 600;
+  color: #557;
+}
+.entry-history__spacer { flex: 1; }
+.entry-history__back {
+  text-decoration: none;
+  color: #1a4fb5;
+}
+.entry-history__back:hover { text-decoration: underline; }
+.entry-history__body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-history__diff {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-history__empty,
+.entry-history__loading {
+  padding: 1em 1.2em;
+  color: #888;
+  font-style: italic;
+}
+.entry-history__error {
+  padding: 0.5em 1em;
+  background: #fee;
+  color: #c22;
+}
+
+/* Revision timeline (left column of the history page) */
+
+.revision-timeline {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #ddd;
+  background: #fafafd;
+  overflow: hidden;
+  min-height: 0;
+}
+/* Font-size lives on the inline labels, not the container, so the em-sized
+   grid columns line up with the rows below. min-height matches the diff
+   header's so the two bands read as a single chrome layer. */
+.revision-timeline__head {
+  display: grid;
+  grid-template-columns: 2em 2em 1fr;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.4em 0.8em;
+  min-height: 2.2em;
+  background: #f0f0f3;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+}
+.revision-timeline__head-radio,
+.revision-timeline__head-label {
+  font-size: 0.66em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #557;
+  font-weight: 600;
+}
+.revision-timeline__head-radio { text-align: center; }
+.revision-timeline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.revision-timeline__row {
+  display: grid;
+  grid-template-columns: 2em 2em 1fr;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.4em 0.8em;
+  border-bottom: 1px solid #d4d8e0;
+}
+.revision-timeline__row--before,
+.revision-timeline__row--after { background: #e6f3ff; }
+.revision-timeline__row input[type='radio'] { justify-self: center; }
+/* visibility:hidden keeps the grid cell so columns stay aligned. */
+.revision-timeline__row input[type='radio']:disabled { visibility: hidden; }
+.revision-timeline__meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+}
+.revision-timeline__line {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+}
+.revision-timeline__line--primary { font-size: 0.92em; }
+.revision-timeline__line--secondary { font-size: 0.85em; color: #557; }
+.revision-timeline__label {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.revision-timeline__author {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Revision diff (right column of the history page) */
+
+.revision-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Font-size lives on inner spans so the wrapper's em units match the
+   timeline head's at base scale. */
+.revision-diff__header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #f0f0f3;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  min-height: 2.2em;
+}
+.revision-diff__header-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding: 0.4em 0.8em;
+  border-right: 1px solid #ddd;
+  min-width: 0;
+  font-weight: 600;
+  color: #557;
+}
+.revision-diff__header-cell:last-child { border-right: 0; }
+.revision-diff__header-side {
+  font-size: 0.66em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #557;
+  flex-shrink: 0;
+}
+.revision-diff__header-detail {
+  font-size: 0.85em;
+  font-weight: 400;
+  color: #224;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.revision-diff__merge {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.revision-diff__merge .cm-mergeView { height: 100%; }
+/* Each cell's `overflow: hidden` (from the package) would otherwise clip
+   long content and stop .cm-mergeView from seeing the overflow it needs to
+   scroll. */
+.revision-diff__merge .cm-mergeView .cm-mergeViewEditor { overflow: visible !important; }
+/* Bottom rule closes off the editor when content is shorter than the pane;
+   for long content it sits at the scroll bottom, only visible when fully
+   scrolled. */
+.revision-diff__merge .cm-editor {
+  font-size: 13px;
+  border-bottom: 1px solid #ddd;
 }

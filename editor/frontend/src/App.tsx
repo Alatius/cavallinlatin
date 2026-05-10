@@ -3,6 +3,7 @@ import { Navigate, type RouteObject } from 'react-router-dom';
 import ActivityPage from './editor/ActivityPage';
 import EditorLayout from './editor/EditorLayout';
 import EntryEditor from './editor/EntryEditor';
+import EntryHistory from './editor/EntryHistory';
 import EditorHome from './editor/EditorHome';
 import LoginPage from './auth/LoginPage';
 import InviteAcceptPage from './auth/InviteAcceptPage';
@@ -36,6 +37,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <EditorHome /> },
       { path: 'activity', element: <ActivityPage /> },
       { path: 'entry/:urlId', element: <EntryEditor /> },
+      { path: 'entry/:urlId/history', element: <EntryHistory /> },
     ],
   },
   { path: '*', element: <Navigate to="/" /> },

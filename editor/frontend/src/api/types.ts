@@ -121,3 +121,16 @@ export interface ActivityItem {
   at: number;
   count: number;
 }
+
+export interface RevisionMeta {
+  id: string;
+  is_current: boolean;
+  status: Status;
+  saved_at: number;
+  saved_by_id: number | null;
+  saved_by: string | null;
+}
+
+export interface RevisionContent extends RevisionMeta {
+  xml_body: string;
+}

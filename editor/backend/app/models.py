@@ -163,6 +163,22 @@ class ActivityItem(BaseModel):
     count: int  # total comments / revisions for this entry
 
 
+class RevisionMeta(BaseModel):
+    """One snapshot in an entry's history. `id` is "current" or
+    str(entry_revisions.id). `saved_by_*` is null only for the imported
+    snapshot (no save event behind it)."""
+    id: str
+    is_current: bool
+    status: Status
+    saved_at: int
+    saved_by_id: int | None
+    saved_by: str | None
+
+
+class RevisionContent(RevisionMeta):
+    xml_body: str
+
+
 class InviteCreateIn(BaseModel):
     email: EmailStr
     display_name: str | None = None

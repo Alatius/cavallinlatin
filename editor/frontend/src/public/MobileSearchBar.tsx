@@ -117,7 +117,7 @@ export default function MobileSearchBar({ basePath }: Props) {
           ))}
           {overflow && (
             <li className="mobile-search__overflow">
-              … fler träffar — förfina sökningen
+              … fler träffar – förfina sökningen
             </li>
           )}
         </ul>

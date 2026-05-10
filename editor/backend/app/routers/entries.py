@@ -12,7 +12,7 @@ from .. import config, db, security
 from ..deps import Conn, CurrentUser, Editor
 from ..models import (
     ENTRY_TYPES, EntryGroupItem, EntryGroupOut, EntryList, EntryOut,
-    EntrySaveIn, EntrySummary, LockInfo,
+    EntrySaveIn, EntrySummary, LockInfo, RevisionContent, RevisionMeta,
 )
 from ..text import column_markers, first_orth_y, fold, orth_texts
 from ..xml_parsing import SAFE_XML_PARSER
@@ -152,6 +152,88 @@ def get_entry_group(url_id: str, conn: Conn):
     return EntryGroupOut(
         focus_url_id=url_id, head_url_id=head_url_id, items=items,
     )
+
+
+def _build_snapshots(
+    conn: sqlite3.Connection, url_id: str, *, with_body: bool,
+) -> list[dict]:
+    """Snapshots in ASC order, current last. Authorship of snapshot k comes
+    from the row created by save k+1 — entry_revisions stores overwritten
+    content alongside the user who did the overwriting, not the author of
+    the content itself."""
+    body_e = ', xml_body' if with_body else ''
+    entry = conn.execute(
+        f'SELECT id, status, updated_at, created_at{body_e} '
+        'FROM entries WHERE url_id = ?',
+        (url_id,),
+    ).fetchone()
+    if not entry:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    body_r = ', r.xml_body' if with_body else ''
+    rows = conn.execute(
+        f'SELECT r.id, r.status, r.user_id, r.created_at, u.display_name{body_r} '
+        'FROM entry_revisions r LEFT JOIN users u ON u.id = r.user_id '
+        'WHERE r.entry_id = ? ORDER BY r.created_at ASC, r.id ASC',
+        (entry['id'],),
+    ).fetchall()
+
+    snaps: list[dict] = []
+    for i, row in enumerate(rows):
+        if i == 0:
+            saved_at: int = entry['created_at']
+            saved_by_id: int | None = None
+            saved_by: str | None = None
+        else:
+            prev = rows[i - 1]
+            saved_at = prev['created_at']
+            saved_by_id = prev['user_id']
+            saved_by = prev['display_name']
+        snap = {
+            'id': str(row['id']), 'is_current': False,
+            'status': row['status'],
+            'saved_at': saved_at, 'saved_by_id': saved_by_id,
+            'saved_by': saved_by,
+        }
+        if with_body:
+            snap['xml_body'] = row['xml_body']
+        snaps.append(snap)
+
+    if rows:
+        last = rows[-1]
+        cur_saved_at: int = last['created_at']
+        cur_saved_by_id: int | None = last['user_id']
+        cur_saved_by: str | None = last['display_name']
+    else:
+        cur_saved_at = entry['updated_at']
+        cur_saved_by_id = None
+        cur_saved_by = None
+    cur = {
+        'id': 'current', 'is_current': True,
+        'status': entry['status'],
+        'saved_at': cur_saved_at, 'saved_by_id': cur_saved_by_id,
+        'saved_by': cur_saved_by,
+    }
+    if with_body:
+        cur['xml_body'] = entry['xml_body']
+    snaps.append(cur)
+    return snaps
+
+
+@router.get('/{url_id}/revisions', response_model=list[RevisionMeta])
+def list_revisions(url_id: str, conn: Conn, _: Editor):
+    snaps = _build_snapshots(conn, url_id, with_body=False)
+    snaps.reverse()
+    return [RevisionMeta(**s) for s in snaps]
+
+
+@router.get('/{url_id}/revisions/{rev_id}', response_model=RevisionContent)
+def get_revision(url_id: str, rev_id: str, conn: Conn, _: Editor):
+    snaps = _build_snapshots(conn, url_id, with_body=True)
+    for s in snaps:
+        if s['id'] == rev_id:
+            return RevisionContent(**s)
+    raise HTTPException(status.HTTP_404_NOT_FOUND)
 
 
 @router.get('/{url_id}', response_model=EntryOut)

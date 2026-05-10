@@ -3,18 +3,12 @@ import { Link } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client';
 import type { ActivityItem } from '../api/types';
+import { formatDate } from '../components/formatDate';
 import { useStoredState } from '../components/useStoredState';
 
 type Tab = 'comments' | 'edits';
 const isTab = (s: string): Tab | undefined =>
   s === 'comments' || s === 'edits' ? s : undefined;
-
-function formatDate(unix: number): string {
-  return new Date(unix * 1000).toLocaleString('sv-SE', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
 
 export default function ActivityPage() {
   const [tab, setTab] = useStoredState<Tab>('activityPage.tab', 'comments', isTab);
@@ -88,9 +82,17 @@ export default function ActivityPage() {
                   <span className="activity-page__count">({it.count})</span>
                 )}
                 {tab === 'edits' && (
-                  <span className="activity-page__count">
-                    {it.count} {it.count === 1 ? 'revision' : 'revisioner'}
-                  </span>
+                  <Link
+                    to={`/editor/entry/${it.url_id}/history`}
+                    className="activity-page__count activity-page__count--link"
+                  >
+                    {it.count} revision
+                    {/* Reserve width for the plural suffix even when
+                        singular, so rows align across the column. */}
+                    {it.count === 1
+                      ? <span aria-hidden="true" style={{ visibility: 'hidden' }}>er</span>
+                      : 'er'}
+                  </Link>
                 )}
               </span>
             </div>

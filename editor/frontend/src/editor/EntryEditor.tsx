@@ -2,7 +2,7 @@ import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { xml as xmlLang } from '@codemirror/lang-xml';
 import { EditorView } from '@codemirror/view';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { unstable_usePrompt as usePrompt, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, unstable_usePrompt as usePrompt, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { STATUS_LABEL_SV } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -275,8 +275,27 @@ export default function EntryEditor() {
             <span className={iconClass} aria-hidden="true">{icon}</span>
           </button>
         ))}
+        {/* Historik tags onto the bar at ≤720px to save space; not a tab
+            (it navigates away), so it sits inside the group as a Link. */}
+        <Link
+          to={`/editor/entry/${ent.entry.url_id}/history`}
+          className="entry-editor__view-toggle-btn"
+          aria-label="Historik"
+          title="Historik"
+        >
+          <span aria-hidden="true">🕐</span>
+        </Link>
       </div>
       <div className="entry-editor__save">
+        <Link
+          to={`/editor/entry/${ent.entry.url_id}/history`}
+          className="entry-editor__history-link"
+          aria-label="Historik"
+          title="Historik"
+        >
+          <span className="hide-on-mobile">Historik</span>
+          <span className="show-on-mobile" aria-hidden="true">🕐</span>
+        </Link>
         <button
           type="button"
           className={

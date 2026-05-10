@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { Comment } from '../api/types';
+import { formatDate } from '../components/formatDate';
 
 interface Props {
   comments: Comment[];
@@ -8,16 +9,6 @@ interface Props {
   error: string | null;
   onAdd(body: string): Promise<void>;
   onClose(): void;
-}
-
-function formatDate(unix: number): string {
-  const d = new Date(unix * 1000);
-  // Locale 'sv-SE' gives YYYY-MM-DD HH:MM, which matches the rest of the
-  // Swedish UI without locale guesswork.
-  return d.toLocaleString('sv-SE', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
 }
 
 export default function CommentsPanel({

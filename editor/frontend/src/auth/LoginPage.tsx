@@ -31,7 +31,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
-      <h1>Cavallins lexikon — redigerarinloggning</h1>
+      <h1>Cavallins lexikon – redigerarinloggning</h1>
       <form onSubmit={onSubmit}>
         <label>
           E-post
