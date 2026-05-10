@@ -3,15 +3,16 @@ import type { ElementSpec, AttrSpec } from '@codemirror/lang-xml';
 // Elements that hold inline content (formatting + grammar tags + cross-refs)
 // and may appear inside `entry`, `sense`, `orth`, `foreign`, `ref`, etc.
 // Listed once and reused so the schema stays in sync with itself.
+// `cb` (column break) can fall anywhere in the flow, so it's allowed here too.
 const INLINE: readonly string[] = [
-  'b', 'u', 'i', 'foreign', 'ref', 'br',
+  'b', 'u', 'i', 'foreign', 'ref', 'br', 'cb',
   'orth', 'form', 'pos', 'gen', 'subc', 'case', 'mood', 'tns',
   'number', 'iType', 'gram', 'lbl', 'hom',
 ];
 
-// What can sit directly inside `entry` / `sense`. Adds `cb` (column break,
-// only meaningful in flow context) and `sense` itself (senses nest).
-const BLOCK: readonly string[] = [...INLINE, 'sense', 'cb'];
+// What can sit directly inside `entry` / `sense`. Adds `sense` itself
+// (senses nest); `cb` is already in INLINE.
+const BLOCK: readonly string[] = [...INLINE, 'sense'];
 
 // Single-word grammar-label content suggestions. Mined from
 // proofread/make_lexicon.py LABEL_TO_TEI by inverting the mapping. These are
@@ -59,10 +60,11 @@ export const TEI_ELEMENTS: readonly ElementSpec[] = [
     attributes: [{ name: 'n' }, { name: 'y' }],
   },
 
-  // Headword & inflection wrapper — primarily contains text + bold/underline
+  // Headword & inflection wrapper — primarily contains text + bold/underline.
+  // Allows `cb` because column breaks occasionally fall mid-headword.
   {
     name: 'orth',
-    children: ['b', 'u', 'i'],
+    children: ['b', 'u', 'i', 'cb'],
     attributes: [{ name: 'y' }],
   },
 
@@ -73,7 +75,7 @@ export const TEI_ELEMENTS: readonly ElementSpec[] = [
   // Cross-reference: text + light formatting inside, `target` attribute
   {
     name: 'ref',
-    children: ['b', 'u', 'i'],
+    children: ['b', 'u', 'i', 'cb'],
     attributes: [{ name: 'target' }],
   },
 
