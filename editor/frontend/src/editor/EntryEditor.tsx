@@ -1,5 +1,5 @@
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
-import { xml as xmlLang } from '@codemirror/lang-xml';
+import { xml as xmlLang, xmlLanguage } from '@codemirror/lang-xml';
 import { EditorView } from '@codemirror/view';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, unstable_usePrompt as usePrompt, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -21,6 +21,7 @@ import { closeTagOnSlash } from './closeTagOnSlash';
 import EditorBottom from './EditorBottom';
 import { TEI_ATTRS, TEI_ELEMENTS } from './teiSchema';
 import { teiLinter } from './teiLint';
+import { refTargetCompletion } from './refTarget';
 import { useEntry } from './useEntry';
 
 const VIEW_TOGGLE: ReadonlyArray<{
@@ -39,7 +40,7 @@ export default function EntryEditor() {
   const location = useLocation();
   const { targetY, clickY, targetColumn, openComments } = readEntryNavState(location.state);
   const ent = useEntry(urlId);
-  const { patch: patchHeadword } = useHeadwords();
+  const { items: allHeadwords, patch: patchHeadword } = useHeadwords();
   const [highlight, setHighlight] = useState<ColumnHighlight | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   // Phone-only pane selector (≤720px). At wider widths the CSS shows all
@@ -105,6 +106,11 @@ export default function EntryEditor() {
   // that case we buffer the click and replay from onCreateEditor.
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const pendingClickRef = useRef<{ offset: number; viewportY: number; focus: boolean } | null>(null);
+  // The completion source closes over a ref so the editor extension can
+  // stay memoized across headword updates (rebuilding it would tear down
+  // editor state).
+  const headwordsRef = useRef(allHeadwords);
+  useEffect(() => { headwordsRef.current = allHeadwords; }, [allHeadwords]);
   // autoCloseTags: false — we mark up *existing* text, so an inserted
   // `</tag>` after the cursor lands before the content the user wants to
   // wrap. The `</`-completion (a separate code path) stays on.
@@ -113,6 +119,9 @@ export default function EntryEditor() {
       autoCloseTags: false,
       elements: TEI_ELEMENTS,
       attributes: TEI_ATTRS,
+    }),
+    xmlLanguage.data.of({
+      autocomplete: refTargetCompletion(() => headwordsRef.current),
     }),
     closeTagOnSlash,
     teiLinter,

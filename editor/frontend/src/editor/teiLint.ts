@@ -4,7 +4,7 @@ import type { EditorState } from '@codemirror/state';
 import type { AttrSpec, ElementSpec } from '@codemirror/lang-xml';
 import type { SyntaxNode } from '@lezer/common';
 
-import { TEI_ATTRS, TEI_ELEMENTS } from './teiSchema';
+import { REQUIRED_ATTRS, TEI_ATTRS, TEI_ELEMENTS } from './teiSchema';
 
 const elementByName = new Map<string, ElementSpec>(
   TEI_ELEMENTS.map((e) => [e.name, e]),
@@ -116,10 +116,17 @@ export const teiLinter = linter((view) => {
 
       const tag = node.firstChild;
       if (!tag) return;
+      const required = REQUIRED_ATTRS[t.name];
+      const present = required ? new Map<string, string>() : null;
       for (const attr of tag.getChildren('Attribute')) {
         const nameNode = attr.getChild('AttributeName');
         if (!nameNode) continue;
         const aname = state.sliceDoc(nameNode.from, nameNode.to);
+        const valueNode = attr.getChild('AttributeValue');
+        const value = valueNode
+          ? unquote(state.sliceDoc(valueNode.from, valueNode.to))
+          : '';
+        present?.set(aname, value);
         const aspec = attrSpecFor(spec, aname);
         if (!aspec) {
           diagnostics.push({
@@ -130,22 +137,31 @@ export const teiLinter = linter((view) => {
           });
           continue;
         }
-        if (aspec.values && aspec.values.length > 0) {
-          const valueNode = attr.getChild('AttributeValue');
-          if (valueNode) {
-            const value = unquote(state.sliceDoc(valueNode.from, valueNode.to));
-            const allowed = aspec.values.map((v) =>
-              typeof v === 'string' ? v : v.label,
-            );
-            if (!allowed.includes(value)) {
-              diagnostics.push({
-                from: valueNode.from,
-                to: valueNode.to,
-                severity: 'warning',
-                message: `Värdet "${value}" är inte i listan: ${allowed.join(', ')}.`,
-              });
-            }
+        if (aspec.values && aspec.values.length > 0 && valueNode) {
+          const allowed = aspec.values.map((v) =>
+            typeof v === 'string' ? v : v.label,
+          );
+          if (!allowed.includes(value)) {
+            diagnostics.push({
+              from: valueNode.from,
+              to: valueNode.to,
+              severity: 'warning',
+              message: `Värdet "${value}" är inte i listan: ${allowed.join(', ')}.`,
+            });
           }
+        }
+      }
+
+      for (const name of required ?? []) {
+        const value = present!.get(name);
+        let message: string | null = null;
+        if (value === undefined) {
+          message = `Attributet "${name}" är obligatoriskt på <${t.name}>.`;
+        } else if (value.trim() === '') {
+          message = `Attributet "${name}" på <${t.name}> får inte vara tomt.`;
+        }
+        if (message !== null) {
+          diagnostics.push({ from: t.from, to: t.to, severity: 'error', message });
         }
       }
     },

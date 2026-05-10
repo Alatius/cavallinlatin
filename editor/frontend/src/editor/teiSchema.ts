@@ -107,3 +107,11 @@ export const TEI_ELEMENTS: readonly ElementSpec[] = [
 ];
 
 export const TEI_ATTRS: readonly AttrSpec[] = [];
+
+// Attributes that must be present and non-empty on the element. Checked by
+// teiLint; lang-xml's AttrSpec has no `required` field, so we keep this as
+// a parallel map rather than wrangling the upstream type.
+export const REQUIRED_ATTRS: Readonly<Record<string, readonly string[]>> = {
+  ref:   ['target'],
+  sense: ['n'],
+};

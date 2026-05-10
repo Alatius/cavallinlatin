@@ -5,6 +5,8 @@ import {
 import type { EditorView } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 
+import { escapeAttr } from '../render';
+
 // XML editing operations for the lexicon. Tag-changing buttons all funnel
 // through `tagOp`, which implements one rule set:
 //
@@ -32,6 +34,23 @@ const CONTENT_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 const INLINE_FORMAT_SET: ReadonlySet<string> = new Set(['b', 'u', 'i']);
+
+// Placeholder attributes injected when a tag is freshly inserted. Empty
+// values trigger teiLint so the user is reminded to fill them in; callers
+// may override via the second arg of `formatOpenTag` (e.g. the ref button
+// pre-fills `target` from the headword index when the selection matches).
+const DEFAULT_ATTRS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  ref: { target: '' },
+};
+
+function formatOpenTag(name: string, override?: Readonly<Record<string, string>>): string {
+  const merged = override ? { ...DEFAULT_ATTRS[name], ...override } : DEFAULT_ATTRS[name];
+  if (!merged) return `<${name}>`;
+  const parts = Object.entries(merged).map(([k, v]) => ` ${k}="${escapeAttr(v)}"`);
+  return `<${name}${parts.join('')}>`;
+}
+
+export type AttrResolver = (selection: string) => Readonly<Record<string, string>> | undefined;
 
 // "Foreign letter" matches the script's _is_foreign_letter (any alpha except
 // the ɔ used as an editorial reverse-c).
@@ -207,8 +226,11 @@ function isMergeSafe(inner: string, X: string): boolean {
 
 type Wrap = { changes: ChangeSpec; selection: SelectionRange };
 
-function plainWrap(from: number, to: number, tag: string): Wrap {
-  const open = `<${tag}>`;
+function plainWrap(
+  from: number, to: number, tag: string,
+  attrs?: Readonly<Record<string, string>>,
+): Wrap {
+  const open = formatOpenTag(tag, attrs);
   const close = `</${tag}>`;
   return {
     changes: [
@@ -353,7 +375,9 @@ function renderSide(segs: Segment[], C: string): string {
 
 export function tagOp(
   state: EditorState, range: SelectionRange, X: string,
+  resolveAttrs?: AttrResolver,
 ): Wrap | null {
+  const attrs = resolveAttrs?.(state.doc.sliceString(range.from, range.to));
   // 1. If the selection is contained in a single same-tag X → unwrap.
   const xTouching = findElementsByNameNear(state, range.from, range.to, X);
   for (const x of xTouching) {
@@ -367,7 +391,7 @@ export function tagOp(
     const { from, to } = expandMergeZone(state, range.from, range.to, X);
     const inner = stripTagsByName(state, from, to, X);
     if (!isMergeSafe(inner, X)) return null;
-    const open = `<${X}>`;
+    const open = formatOpenTag(X, attrs);
     const close = `</${X}>`;
     return {
       changes: { from, to, insert: open + inner + close },
@@ -378,14 +402,14 @@ export function tagOp(
   // 3. Inline-format target → plain wrap (inline format nests freely).
   if (INLINE_FORMAT_SET.has(X)) {
     if (range.empty) return null;
-    return plainWrap(range.from, range.to, X);
+    return plainWrap(range.from, range.to, X, attrs);
   }
 
   // 4. Content-tag target with an ancestor → extract.
   const ancestors = findContentAncestors(state, range.from, range.to);
   if (ancestors.length === 0) {
     if (range.empty) return null;
-    return plainWrap(range.from, range.to, X);
+    return plainWrap(range.from, range.to, X, attrs);
   }
 
   const foreign = ancestors.find((a) => a.name === 'foreign');
@@ -398,7 +422,7 @@ export function tagOp(
   const middle = state.doc.sliceString(range.from, range.to);
   const beforeRendered = renderSide(beforeSegs, C.name);
   const afterRendered  = renderSide(afterSegs,  C.name);
-  const wrappedOpen  = `<${X}>`;
+  const wrappedOpen  = formatOpenTag(X, attrs);
   const wrappedClose = `</${X}>`;
   const replacement = beforeRendered + wrappedOpen + middle + wrappedClose + afterRendered;
   const selOffset = beforeRendered.length + wrappedOpen.length;
@@ -423,10 +447,13 @@ export function tagOp(
   };
 }
 
-export function applyTag(view: EditorView, tag: string): boolean {
+export function applyTag(
+  view: EditorView, tag: string,
+  resolveAttrs?: AttrResolver,
+): boolean {
   const { state } = view;
   const ranges = state.selection.ranges;
-  const wraps = ranges.map((r) => tagOp(state, r, tag));
+  const wraps = ranges.map((r) => tagOp(state, r, tag, resolveAttrs));
   if (wraps.every((w) => w === null)) return false;
   view.dispatch({
     changes: wraps.flatMap((w) => w ? [w.changes] : []),

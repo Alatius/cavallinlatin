@@ -480,6 +480,12 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 }
 .entry-editor__code .cm-scroller { overflow: auto; }
 
+/* Hide the icon column for ref-target completions (refTarget.ts). The base
+   theme reserves ~1.4em even when the icon is empty, leaving a visible
+   gutter before the label. Chained selector beats the base theme's single-
+   class rule on specificity. */
+.cm-completionIcon.cm-completionIcon-tei-ref { display: none; }
+
 .editor-bottom {
   display: flex;
   flex-direction: column;

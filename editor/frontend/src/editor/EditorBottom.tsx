@@ -1,7 +1,9 @@
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import type { EditorView } from '@codemirror/view';
-import { applyTag } from './xmlOps';
+import { applyTag, type AttrResolver } from './xmlOps';
 import { useStoredState } from '../components/useStoredState';
+import { useHeadwords } from '../components/HeadwordsContext';
+import { resolveRefTarget } from './refTarget';
 
 type Props = { editorRef: React.RefObject<ReactCodeMirrorRef | null> };
 type Panel = 'tags' | 'chars';
@@ -110,6 +112,17 @@ export default function EditorBottom({ editorRef }: Props) {
   const [active, setActive] = useStoredState<Panel | null>(
     'editorBottom.panel', null, isPanel,
   );
+  const { items: headwords } = useHeadwords();
+  // Per-tag attribute resolvers run inside applyTag with the selected text.
+  // Currently only `ref` populates one — if the selection unambiguously
+  // matches a single headword (incl. "I. Hostus" → hostus1) we pre-fill the
+  // target so the user doesn't have to look up the id.
+  const resolversByTag: Record<string, AttrResolver> = {
+    ref: (sel: string) => {
+      const target = resolveRefTarget(sel, headwords);
+      return target ? { target } : undefined;
+    },
+  };
 
   // onMouseDown(preventDefault) keeps focus in the editor — without it the
   // button steals focus and the selection is lost before the dispatch.
@@ -133,7 +146,7 @@ export default function EditorBottom({ editorRef }: Props) {
               type="button"
               className={chipClass(item.tag)}
               title={item.label}
-              onMouseDown={withView((v) => applyTag(v, item.tag))}
+              onMouseDown={withView((v) => applyTag(v, item.tag, resolversByTag[item.tag]))}
             >
               {item.tag}
             </button>
