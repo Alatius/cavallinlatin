@@ -85,7 +85,7 @@
 }
 
 /* The distinctions that are worth preserving typographically. */
-.entry-render--public orth { font-weight: 700; color: #702895; }
+.entry-render--public orth { color: #702895; }
 .entry-render--public .foreign { color: #2a558e; }
 .entry-render--public .pos,
 .entry-render--public .gen,
@@ -96,7 +96,6 @@
 .entry-render--public .number,
 .entry-render--public .lbl { font-style: italic; }
 .entry-render--public .hom { font-weight: 700; }
-.entry-render--public .sense-num { font-weight: 700; }
 
 /* Hanging indent on paragraphs (public only): the headword pokes out to the
    left of the continuation lines, matching the dictionary tradition. The
