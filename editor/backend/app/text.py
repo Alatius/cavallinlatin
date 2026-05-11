@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from lxml.etree import _Element
+
+
+class DerivedFields(NamedTuple):
+    """Cached scalar columns recomputed from an <entry> element. Save,
+    split and join all need the same set of values; centralizing them
+    here keeps the three paths in sync."""
+    headword: str
+    alt_headwords: list[str]
+    headword_sort: str
+    plaintext: str
+    first_orth_y: float | None
+    leading_cb: str | None
 
 
 def fold(s: str) -> str:
@@ -67,6 +79,30 @@ def first_orth_y(entry: '_Element') -> float | None:
         return float(y) if y else None
     except ValueError:
         return None
+
+
+def derive_xml_id_base(orth_text: str) -> str:
+    """Normalize a headword (an <orth>'s text content) to xml-id form.
+
+    Used when splitting an entry: the new entry's xml_id is derived from
+    the first <orth> in its content, dropping diacritics and non-letter
+    characters. Returns '' if there's nothing usable (caller refuses the
+    split in that case).
+    """
+    return ''.join(c for c in fold(orth_text) if 'a' <= c <= 'z')
+
+
+def derive_entry_fields(el: '_Element', *, headword_fallback: str) -> DerivedFields:
+    orths = orth_texts(el)
+    headword = orths[0] if orths else headword_fallback
+    return DerivedFields(
+        headword=headword,
+        alt_headwords=orths[1:],
+        headword_sort=fold(headword),
+        plaintext=' '.join(''.join(el.itertext()).split()),
+        first_orth_y=first_orth_y(el),
+        leading_cb=column_markers(el)[0],
+    )
 
 
 def column_markers(entry: '_Element') -> tuple[str | None, str | None]:

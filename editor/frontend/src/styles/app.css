@@ -530,6 +530,117 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   color: #1e3a8a;
 }
 
+/* "Mer ▴" trigger + popup. The trigger reuses .editor-bottom__toggle; the
+   popup borrows the shared .dropdown-menu surface, anchored above the bar
+   (the editor bottom-bar is at the bottom of the editor pane). */
+.entry-actions-menu {
+  position: relative;
+  display: inline-block;
+}
+.entry-actions-menu__menu {
+  bottom: calc(100% + 4px);
+  left: 0;
+}
+
+.entry-actions-modal {
+  /* Native <dialog> centers itself; we just sit on top of any default and
+     fix the look. */
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  padding: 1em 1.25em 0.9em;
+  max-width: min(900px, 92vw);
+  width: 60em;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+.entry-actions-modal--narrow { width: 32em; }
+.entry-actions-modal::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+.entry-actions-modal__title {
+  margin: 0 0 0.5em;
+  font-size: 1.05em;
+}
+.entry-actions-modal__hint {
+  margin: 0 0 0.8em;
+  color: #555;
+  font-size: 0.92em;
+}
+.entry-actions-modal__hint code {
+  background: #f3f3f3;
+  padding: 0 0.25em;
+  border-radius: 2px;
+  font-size: 0.92em;
+}
+.entry-actions-modal__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75em;
+}
+.entry-actions-modal__col-label {
+  font-size: 0.82em;
+  color: #666;
+  margin-bottom: 0.25em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.entry-actions-modal__preview {
+  margin: 0;
+  padding: 0.5em 0.6em;
+  background: #fafafa;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 3px;
+  font-size: 0.85em;
+  line-height: 1.35;
+  max-height: 18em;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.entry-actions-modal__error {
+  margin-top: 0.7em;
+  padding: 0.5em 0.7em;
+  background: #fdeaea;
+  border: 1px solid #e7a3a3;
+  border-radius: 3px;
+  color: #8a1f1f;
+  font-size: 0.9em;
+}
+.entry-actions-modal__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 0.9em;
+}
+.entry-actions-modal__buttons button {
+  font: inherit;
+  font-size: 13px;
+  padding: 0.35em 1em;
+  border: 1px solid var(--border, #ccc);
+  background: #fff;
+  border-radius: 3px;
+  cursor: pointer;
+}
+/* The global button:hover/:disabled rules would otherwise repaint the
+   primary with a light fill and lose the white text — pin its background
+   across all interaction states. */
+.entry-actions-modal__buttons .entry-actions-modal__primary,
+.entry-actions-modal__buttons .entry-actions-modal__primary:disabled {
+  background: #2c5da1;
+  border-color: #1e3a8a;
+  color: #fff;
+  font-weight: 500;
+}
+.entry-actions-modal__buttons .entry-actions-modal__primary:hover:not(:disabled) {
+  background: #224a85;
+}
+.entry-actions-modal__buttons .entry-actions-modal__primary:active:not(:disabled) {
+  background: #1c3f73;
+}
+.entry-actions-modal__buttons button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .editor-chip {
   font: inherit;
   font-size: 12px;

@@ -15,6 +15,7 @@ import { useDebounce } from '../components/useDebounce';
 import { useHeadwords } from '../components/HeadwordsContext';
 import { useHorizontalResize } from '../components/useHorizontalResize';
 import CommentsPanel from './CommentsPanel';
+import EntryActionsMenu from './EntryActionsMenu';
 import LockIndicator from './LockIndicator';
 import SaveButton from './SaveButton';
 import { closeTagOnSlash } from './closeTagOnSlash';
@@ -350,7 +351,18 @@ export default function EntryEditor() {
           basicSetup={{ lineNumbers: true, foldGutter: true, closeBrackets: false }}
           height="100%"
         />
-        <EditorBottom editorRef={cmRef} />
+        <EditorBottom
+          editorRef={cmRef}
+          trailing={(
+            <EntryActionsMenu
+              editorRef={cmRef}
+              entry={ent.entry}
+              dirty={ent.dirty}
+              onSplitDone={() => { ent.reload(); }}
+              onJoinDone={() => { ent.reload(); }}
+            />
+          )}
+        />
       </div>
       <div
         ref={xmlPane.handleRef}

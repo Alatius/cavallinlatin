@@ -141,6 +141,28 @@ class EntrySaveIn(BaseModel):
     expected_updated_at: int | None = None
 
 
+class EntrySplitIn(BaseModel):
+    # Character offset into the saved xml_body at which to split. Must land
+    # between two top-level children of the root <entry>; the server
+    # rejects offsets that produce malformed halves or a second half that
+    # lacks an <orth>.
+    offset: int = Field(ge=0)
+
+
+class EntrySplitOut(BaseModel):
+    # Updated summary of the surviving (first) entry. Its url_id is
+    # unchanged, but its alt_headwords typically shrinks (any <orth>s that
+    # moved to the new half are now absent). The frontend uses this to
+    # patch the sidebar row in place.
+    source_entry: EntrySummary
+    # Summary of the newly-created entry; its url_id matches its xml_id,
+    # derived from the first <orth> in the new half with homograph
+    # numbering bumped to avoid id collisions. The frontend splices this
+    # row into the index right after the source without refetching the
+    # full ~35k-row /headwords list.
+    new_entry: EntrySummary
+
+
 class CommentOut(BaseModel):
     id: int
     user_id: int

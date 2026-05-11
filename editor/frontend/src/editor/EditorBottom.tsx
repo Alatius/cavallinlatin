@@ -5,7 +5,12 @@ import { useStoredState } from '../components/useStoredState';
 import { useHeadwords } from '../components/HeadwordsContext';
 import { resolveRefTarget } from './refTarget';
 
-type Props = { editorRef: React.RefObject<ReactCodeMirrorRef | null> };
+type Props = {
+  editorRef: React.RefObject<ReactCodeMirrorRef | null>;
+  // Extra controls (e.g. EntryActionsMenu) rendered after Taggar/Tecken
+  // inside the bottom bar.
+  trailing?: React.ReactNode;
+};
 type Panel = 'tags' | 'chars';
 const isPanel = (s: string): Panel | undefined =>
   s === 'tags' || s === 'chars' ? s : undefined;
@@ -108,7 +113,7 @@ function renderGroups<T>(
   ]);
 }
 
-export default function EditorBottom({ editorRef }: Props) {
+export default function EditorBottom({ editorRef, trailing }: Props) {
   const [active, setActive] = useStoredState<Panel | null>(
     'editorBottom.panel', null, isPanel,
   );
@@ -184,6 +189,7 @@ export default function EditorBottom({ editorRef }: Props) {
         >
           Tecken
         </button>
+        {trailing}
       </div>
     </div>
   );

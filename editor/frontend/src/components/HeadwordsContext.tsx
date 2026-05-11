@@ -47,6 +47,14 @@ interface HeadwordsContextValue {
   items: FoldedEntry[];
   loaded: boolean;
   patch: (urlId: string, changes: Partial<EntrySummary>) => void;
+  // Splice a new entry into the index right after `afterUrlId`, mirroring
+  // the backend's sort_key insertion. Used by the split action so the new
+  // entry's row appears immediately without refetching the full headwords
+  // list. No-op if `afterUrlId` isn't present (e.g., index hasn't loaded).
+  insertAfter: (afterUrlId: string, summary: EntrySummary) => void;
+  // Drop an entry from the index. Used by the join action after the
+  // absorbed entry is deleted server-side.
+  remove: (urlId: string) => void;
 }
 
 const Ctx = createContext<HeadwordsContextValue | null>(null);
@@ -101,7 +109,31 @@ export function HeadwordsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  return <Ctx.Provider value={{ items, loaded, patch }}>{children}</Ctx.Provider>;
+  const insertAfter = useCallback((afterUrlId: string, summary: EntrySummary) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((it) => it.url_id === afterUrlId);
+      if (idx < 0) return prev;
+      const next = prev.slice();
+      next.splice(idx + 1, 0, enrich(summary));
+      return next;
+    });
+  }, []);
+
+  const remove = useCallback((urlId: string) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((it) => it.url_id === urlId);
+      if (idx < 0) return prev;
+      const next = prev.slice();
+      next.splice(idx, 1);
+      return next;
+    });
+  }, []);
+
+  return (
+    <Ctx.Provider value={{ items, loaded, patch, insertAfter, remove }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useHeadwords(): HeadwordsContextValue {

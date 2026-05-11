@@ -109,7 +109,7 @@ function rightTrim(s: string, minPos: number): number {
   return i;
 }
 
-type Enclosing = {
+export type Enclosing = {
   name: string;
   outerFrom: number; outerTo: number;
   innerFrom: number; innerTo: number;
@@ -118,7 +118,7 @@ type Enclosing = {
 
 // Reads the tag name and inner/outer bounds off an `Element` syntax node.
 // Returns null for self-closing or otherwise malformed elements.
-function readElement(state: EditorState, node: SyntaxNode): Enclosing | null {
+export function readElement(state: EditorState, node: SyntaxNode): Enclosing | null {
   if (node.name !== 'Element') return null;
   const openTag = node.firstChild;
   const closeTag = node.lastChild;

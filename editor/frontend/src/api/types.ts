@@ -86,6 +86,11 @@ export interface EntryList {
   items: EntrySummary[];
 }
 
+export interface EntrySplitResult {
+  source_entry: EntrySummary;
+  new_entry: EntrySummary;
+}
+
 export interface SearchHit {
   url_id: string;
   headword: string;
