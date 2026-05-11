@@ -263,78 +263,80 @@ export default function EntryEditor() {
       >
         {STATUS_LABEL_SV[ent.status]}
       </span>
-      <div
-        className="entry-editor__view-toggle"
-        role="radiogroup"
-        aria-label="Visa"
-      >
-        {VIEW_TOGGLE.map(({ v, icon, label, iconClass }) => (
-          <button
-            key={v}
-            type="button"
-            role="radio"
-            aria-checked={mobileView === v}
-            aria-label={label}
-            title={label}
-            className={
-              'entry-editor__view-toggle-btn'
-              + (mobileView === v ? ' entry-editor__view-toggle-btn--active' : '')
-            }
-            onClick={() => pickMobileView(v)}
+      <div className="entry-editor__trailing">
+        <div
+          className="entry-editor__view-toggle"
+          role="radiogroup"
+          aria-label="Visa"
+        >
+          {VIEW_TOGGLE.map(({ v, icon, label, iconClass }) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={mobileView === v}
+              aria-label={label}
+              title={label}
+              className={
+                'entry-editor__view-toggle-btn'
+                + (mobileView === v ? ' entry-editor__view-toggle-btn--active' : '')
+              }
+              onClick={() => pickMobileView(v)}
+            >
+              <span className={iconClass} aria-hidden="true">{icon}</span>
+            </button>
+          ))}
+          {/* Historik tags onto the bar at ≤720px to save space; not a tab
+              (it navigates away), so it sits inside the group as a Link. */}
+          <Link
+            to={`/editor/entry/${ent.entry.url_id}/history`}
+            className="entry-editor__view-toggle-btn"
+            aria-label="Historik"
+            title="Historik"
           >
-            <span className={iconClass} aria-hidden="true">{icon}</span>
+            <span aria-hidden="true">🕐</span>
+          </Link>
+        </div>
+        <div className="entry-editor__save">
+          <Link
+            to={`/editor/entry/${ent.entry.url_id}/history`}
+            className="entry-editor__history-link"
+            aria-label="Historik"
+            title="Historik"
+          >
+            <span className="hide-on-mobile">Historik</span>
+            <span className="show-on-mobile" aria-hidden="true">🕐</span>
+          </Link>
+          <button
+            type="button"
+            className={
+              'entry-editor__comments-toggle'
+              + (commentsOpen ? ' entry-editor__comments-toggle--open' : '')
+              + (ent.comments.length > 0 ? ' entry-editor__comments-toggle--has' : '')
+            }
+            onClick={() => setCommentsOpen((v) => !v)}
+            aria-expanded={commentsOpen}
+            aria-label={commentsLabel}
+          >
+            <span className="hide-on-mobile">{commentsLabel}</span>
+            <span className="show-on-mobile" aria-hidden="true">💬</span>
           </button>
-        ))}
-        {/* Historik tags onto the bar at ≤720px to save space; not a tab
-            (it navigates away), so it sits inside the group as a Link. */}
-        <Link
-          to={`/editor/entry/${ent.entry.url_id}/history`}
-          className="entry-editor__view-toggle-btn"
-          aria-label="Historik"
-          title="Historik"
-        >
-          <span aria-hidden="true">🕐</span>
-        </Link>
-      </div>
-      <div className="entry-editor__save">
-        <Link
-          to={`/editor/entry/${ent.entry.url_id}/history`}
-          className="entry-editor__history-link"
-          aria-label="Historik"
-          title="Historik"
-        >
-          <span className="hide-on-mobile">Historik</span>
-          <span className="show-on-mobile" aria-hidden="true">🕐</span>
-        </Link>
-        <button
-          type="button"
-          className={
-            'entry-editor__comments-toggle'
-            + (commentsOpen ? ' entry-editor__comments-toggle--open' : '')
-            + (ent.comments.length > 0 ? ' entry-editor__comments-toggle--has' : '')
-          }
-          onClick={() => setCommentsOpen((v) => !v)}
-          aria-expanded={commentsOpen}
-          aria-label={commentsLabel}
-        >
-          <span className="hide-on-mobile">{commentsLabel}</span>
-          <span className="show-on-mobile" aria-hidden="true">💬</span>
-        </button>
-        <span
-          className={
-            'entry-editor__save-dot'
-            + (saveStatus !== 'clean' ? ` entry-editor__save-dot--${saveStatus}` : '')
-          }
-          aria-hidden="true"
-          title={saveStatusLabel}
-        />
-        <SaveButton
-          dirty={ent.dirty}
-          saving={ent.saving}
-          currentStatus={ent.status}
-          onSave={() => ent.save()}
-          onSaveWithStatus={(s) => ent.saveWithStatus(s)}
-        />
+          <span
+            className={
+              'entry-editor__save-dot'
+              + (saveStatus !== 'clean' ? ` entry-editor__save-dot--${saveStatus}` : '')
+            }
+            aria-hidden="true"
+            title={saveStatusLabel}
+          />
+          <SaveButton
+            dirty={ent.dirty}
+            saving={ent.saving}
+            currentStatus={ent.status}
+            onSave={() => ent.save()}
+            onSaveWithStatus={(s) => ent.saveWithStatus(s)}
+          />
+        </div>
       </div>
     </>
   );

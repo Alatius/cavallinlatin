@@ -432,8 +432,17 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 
 /* Entry editor */
 
-.entry-editor__save {
+/* Right-aligned trailing group: view-toggle (≤720px only) + save block.
+   Wrapping the two in a single flex item means that when the toolbar runs
+   out of room, the group line-breaks together instead of breaking between
+   the toggle and the save controls. */
+.entry-editor__trailing {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+.entry-editor__save {
   display: flex;
   align-items: center;
   gap: 0.6em;
@@ -1380,4 +1389,17 @@ a.entry-editor__view-toggle-btn:hover { text-decoration: none; background: #fafa
 .revision-diff__merge .cm-editor {
   font-size: 13px;
   border-bottom: 1px solid #ddd;
+}
+
+/* History page: below 720px the 260px timeline crowds out the diff, so we
+   stack vertically. The timeline gets a capped slice (rest scrolls) so the
+   diff keeps the bulk of the viewport. */
+@media (max-width: 720px) {
+  .entry-history__body { flex-direction: column; }
+  .revision-timeline {
+    width: auto;
+    max-height: 10.5em;
+    border-right: 0;
+    border-bottom: 1px solid #ddd;
+  }
 }
