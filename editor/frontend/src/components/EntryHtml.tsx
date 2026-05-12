@@ -40,10 +40,15 @@ interface Props {
 
 export default function EntryHtml({ xml, initialColumn, onHighlight, autoHighlightKey, autoHighlightY, autoHighlightColumn, autoHighlightViewportY, variant = 'editor', onXmlClick }: Props) {
   const navigate = useNavigate();
-  const entryHrefPrefix = variant === 'public' ? '/entry/' : '/editor/entry/';
+  // Prefix hrefs with Vite's BASE_URL so right-click "Copy link" yields the
+  // deployed URL (e.g. /cavallinlatin/editor/entry/…). The click handler
+  // below strips the base before calling navigate(), since react-router's
+  // basename is already applied internally.
+  const basePrefix = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const entryHrefPrefix = (variant === 'public' ? '/entry/' : '/editor/entry/');
   const html = useMemo(
-    () => entryXmlToHtml(xml, { entryHrefPrefix }),
-    [xml, entryHrefPrefix],
+    () => entryXmlToHtml(xml, { entryHrefPrefix: basePrefix + entryHrefPrefix }),
+    [xml, entryHrefPrefix, basePrefix],
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -103,7 +108,10 @@ export default function EntryHtml({ xml, initialColumn, onHighlight, autoHighlig
         const href = refLink.getAttribute('href');
         if (href) {
           e.preventDefault();
-          navigate(href);
+          const path = basePrefix && href.startsWith(basePrefix + '/')
+            ? href.slice(basePrefix.length)
+            : href;
+          navigate(path);
           return;
         }
       }
