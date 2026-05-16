@@ -92,6 +92,14 @@ export default function EntryView() {
               }}
               className="entry-group__member"
               data-url-id={m.url_id}
+              onClick={(e) => {
+                // Clicking inside a non-focus member: route the URL/breadcrumb
+                // to that member so it becomes the new focus. Skip when the
+                // click is on a cross-reference link — EntryHtml handles those.
+                if (m.url_id === group.focus_url_id) return;
+                if ((e.target as HTMLElement).closest('a.ref')) return;
+                navigate(`/entry/${m.url_id}`);
+              }}
             >
               <EntryHtml xml={m.xml_body}
                          initialColumn={m.starting_column}

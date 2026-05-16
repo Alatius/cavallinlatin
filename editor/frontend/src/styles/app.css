@@ -952,7 +952,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   position: absolute;
   left: 0;
   right: 0;
-  background: rgba(220, 50, 0, 0.2);
+  background: rgba(112, 40, 149, 0.2);
   pointer-events: none;
 }
 
