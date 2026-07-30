@@ -35,8 +35,15 @@ def app():
 
 @pytest.fixture(scope='session', autouse=True)
 def seed(app):
-    """Seed an admin user and two entries once for the whole test session."""
+    """Seed an admin user and two entries once for the whole test session.
+
+    Derived columns are computed the same way the app computes them —
+    `headword_sort` in particular must be `fold(headword)`, or the seeded rows
+    sit in a state no code path can produce and endpoints that match on it
+    (/api/lookup, /api/entries?q=) silently miss them.
+    """
     from app import db, security
+    from app.text import fold
     pw_hash = security.hash_password('correctpass1234')
     now = security.now()
     with db.get_conn() as conn:
@@ -49,13 +56,14 @@ def seed(app):
             xml = f'<entry id="{url}" type="primary"><orth>word{i}</orth> contents</entry>'
             conn.execute(
                 'INSERT OR IGNORE INTO entries '
-                '(url_id, type, headword, headword_sort, xml_body, plaintext, '
+                '(url_id, xml_id, type, headword, headword_sort, xml_body, plaintext, '
                 ' sort_key, created_at, updated_at) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (url, 'primary', f'word{i}', f'word{i}', xml,
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (url, url, 'primary', f'word{i}', fold(f'word{i}'), xml,
                  f'word{i} contents', (i + 1) * 100, now, now),
             )
     yield
+    Path(_TMP_DB.name).unlink(missing_ok=True)
 
 
 @pytest.fixture

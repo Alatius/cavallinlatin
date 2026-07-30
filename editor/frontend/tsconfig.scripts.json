@@ -1,0 +1,11 @@
+// The maintenance scripts in scripts/ run under `node --experimental-strip-types`
+// and import from src/, so they need Node globals and node: builtins that the app
+// project deliberately excludes. Files under src/ are pulled in transitively by
+// their imports. `npm run typecheck` checks both projects.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["scripts"]
+}

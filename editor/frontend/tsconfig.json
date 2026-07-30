@@ -8,6 +8,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    // App code is browser-only; Node globals come in via tsconfig.scripts.json.
+    "types": [],
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,

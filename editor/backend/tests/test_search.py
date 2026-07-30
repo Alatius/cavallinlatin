@@ -4,8 +4,8 @@ from __future__ import annotations
 
 
 def test_lookup_known_headword(client):
-    # testentry2 is read-only across the test suite; testentry1 gets mutated
-    # by the save tests so its headword can't be relied on.
+    # testentry2 keeps its seeded headword for the whole session; testentry1
+    # gets mutated by the save tests so its headword can't be relied on.
     r = client.get('/api/lookup', params={'q': 'word1'})
     assert r.status_code == 200
     assert r.json() == {'url_id': 'testentry2'}

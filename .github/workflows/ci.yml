@@ -46,6 +46,11 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      # The xmlOps case spec. Runs under `node --experimental-strip-types`, so a
+      # transitive extensionless import in src/ breaks it — which is how it went
+      # unnoticed as dead for several commits. Running it in CI closes that.
+      - name: Run xmlOps case spec
+        run: npm test
       - name: Build
         run: npm run build
 

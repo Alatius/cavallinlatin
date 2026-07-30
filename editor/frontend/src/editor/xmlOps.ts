@@ -5,7 +5,9 @@ import {
 import type { EditorView } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 
-import { escapeAttr } from '../render';
+// Explicit .ts extension: scripts/test-xmlops.ts runs this module through
+// `node --experimental-strip-types`, whose ESM resolver requires it.
+import { escapeAttr } from '../render.ts';
 
 // XML editing operations for the lexicon. Tag-changing buttons all funnel
 // through `tagOp`, which implements one rule set:
