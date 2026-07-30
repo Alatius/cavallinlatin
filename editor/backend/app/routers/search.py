@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from ..deps import Conn
 from ..models import EntrySummary, SearchHit, SearchOut, UrlIdOut
@@ -36,13 +36,41 @@ _CONTROL_TO_SPACE = {c: ' ' for c in [*range(0x20), *range(0x7f, 0xa0)]}
 
 
 @router.get('/headwords', response_model=list[EntrySummary])
-def all_headwords(conn: Conn):
+def all_headwords(conn: Conn, request: Request, response: Response):
     """Return every entry's url_id + headword + alt_headwords + type + status,
     in document order.
 
-    Used by the virtualized index panel in the frontend. Keeping this compact:
-    34,778 rows at ~80 bytes each gzip to ~400-600 KB, fetched once per session.
+    Used by the virtualized index panel in the frontend, and by the public
+    layout — so every anonymous visitor to any page pays for it. That is
+    ~4 MB of JSON for 34,775 rows, which measured 4.06 MB on the wire in
+    production because nothing was compressing it (mod_deflate covers the
+    static assets but not proxied application/json). GZipMiddleware in
+    main.py now handles that; the ETag here handles the repeat visit.
+
+    Cache-Control: no-cache means "always revalidate", not "don't store" — so
+    a reload costs a conditional request and a 304 instead of the payload,
+    while an editor still never sees a stale index.
     """
+    # Covers every mutation that can change this payload: a row added or
+    # removed (entry count), any save/split/join (each snapshots first, so the
+    # revision sequence advances), or a comment (comment_count is part of the
+    # response). Deliberately keyed on the revision id rather than
+    # MAX(updated_at): that column has one-second granularity, so two writes
+    # in the same second would leave the stamp unchanged and hand an editor a
+    # stale index.
+    stamp = conn.execute(
+        'SELECT (SELECT COUNT(*) FROM entries) AS n, '
+        '       (SELECT COALESCE(MAX(id), 0) FROM entry_revisions) AS r, '
+        '       (SELECT COUNT(*) FROM entry_comments) AS c'
+    ).fetchone()
+    etag = f'W/"hw-{stamp["n"]}-{stamp["r"]}-{stamp["c"]}"'
+    if request.headers.get('if-none-match') == etag:
+        return Response(
+            status_code=status.HTTP_304_NOT_MODIFIED,
+            headers={'ETag': etag, 'Cache-Control': 'no-cache'},
+        )
+    response.headers['ETag'] = etag
+    response.headers['Cache-Control'] = 'no-cache'
     # LEFT JOIN against an aggregate so entries with zero comments still
     # appear (with comment_count=0). Group-by-rowid + indexed entry_id keeps
     # this a single index scan even with 35k entries.

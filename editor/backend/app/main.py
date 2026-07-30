@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, security
@@ -106,6 +107,11 @@ class BodySizeLimitMiddleware:
 def create_app() -> FastAPI:
     app = FastAPI(title='Cavallin Lexicon')
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+    # Compress here rather than relying on mod_deflate: the deployed Apache
+    # gzips static assets but not proxied application/json, so /api/headwords
+    # was going out at 4.06 MB to every visitor of every public page.
+    # Outermost (added last) so it sees the finished response body.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     with db.get_conn() as conn:
         # Sweep expired sessions on startup so the table doesn't grow

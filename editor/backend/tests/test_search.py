@@ -61,3 +61,27 @@ def test_headwords_endpoint(client):
     items = r.json()
     assert len(items) >= 2
     assert {'url_id', 'headword', 'type', 'status'}.issubset(items[0].keys())
+
+
+def test_headwords_is_conditional_and_compressed(client):
+    """Every public page loads this, so it must not resend ~4 MB each time."""
+    first = client.get('/api/headwords', headers={'Accept-Encoding': 'gzip'})
+    assert first.status_code == 200
+    etag = first.headers.get('etag')
+    assert etag, 'no ETag; every reload would resend the whole index'
+    assert first.headers.get('cache-control') == 'no-cache'
+
+    again = client.get('/api/headwords', headers={'If-None-Match': etag})
+    assert again.status_code == 304
+    assert again.content == b''
+
+
+def test_headwords_etag_changes_when_an_entry_changes(auth_client):
+    before = auth_client.get('/api/headwords').headers['etag']
+    r = auth_client.put('/api/entries/testentry1', json={
+        'xml_body': '<entry id="testentry1" type="primary"><orth>word0</orth>'
+                    ' etag probe</entry>',
+        'status': 'in_progress',
+    })
+    assert r.status_code == 200, r.text
+    assert auth_client.get('/api/headwords').headers['etag'] != before
