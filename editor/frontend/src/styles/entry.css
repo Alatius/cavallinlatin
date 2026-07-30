@@ -11,7 +11,7 @@
   font-size: 1.05rem;
   line-height: 1.5;
 }
-.entry-render p { margin: 0.5em 0; }
+.entry-render .entry { margin: 0.5em 0; }
 .entry-render cb { display: none; }
 
 /* ---------- Editor view: color-coded tag distinctions ----------
@@ -34,7 +34,7 @@
 .entry-render .iType    { background: #f5dcc7; color: #7a3c18; }
 .entry-render .gram     { background: #d3e8ec; color: #1d5662; }
 .entry-render .hom      { background: #ece2b0; color: #6a5718; font-weight: bold; }
-.entry-render p[type="reference"] { background: #efefef; }
+.entry-render .entry[type="reference"] { background: #efefef; }
 .entry-render a.ref {
   color: inherit;
   text-decoration: none;
@@ -79,7 +79,7 @@
 .entry-render--public .gram,
 .entry-render--public .hom,
 .entry-render--public .sense-num,
-.entry-render--public p[type="reference"] {
+.entry-render--public .entry[type="reference"] {
   background: transparent;
   color: inherit;
 }
@@ -103,11 +103,11 @@
 /* Hanging indent on paragraphs (public only): the headword pokes out to the
    left of the continuation lines, matching the dictionary tradition. The
    equivalent rule for .sense now lives in the shared block above. */
-.entry-render--public p {
+.entry-render--public .entry {
   margin: 0 0 0.55em 0;
   padding-left: 1.2em;
   text-indent: -1.2em;
 }
 
 /* Cross-references: slightly muted, otherwise plain. */
-.entry-render--public p[type="reference"] { color: #555; }
+.entry-render--public .entry[type="reference"] { color: #555; }
