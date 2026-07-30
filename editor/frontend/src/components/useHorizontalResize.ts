@@ -20,11 +20,25 @@ interface Result {
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
+// try/catch rather than a typeof guard: when a browser is set to block site
+// data, `localStorage` is a property whose *getter throws*, so `typeof` does
+// not save you — it rethrows. This runs from a useState initializer during
+// render, and there is no error boundary above it, so an unguarded access
+// meant a blank page for that visitor. Matches useStoredState.
 function readStored(key: string, fallback: number): number {
-  if (typeof localStorage === 'undefined') return fallback;
-  const s = localStorage.getItem(key);
-  const n = s ? Number.parseInt(s, 10) : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  try {
+    const s = localStorage.getItem(key);
+    const n = s ? Number.parseInt(s, 10) : Number.NaN;
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: number): void {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch { /* blocked or over quota — the pane width just won't persist */ }
 }
 
 export function useHorizontalResize(opts: Options): Result {
@@ -65,7 +79,7 @@ export function useHorizontalResize(opts: Options): Result {
       window.removeEventListener('pointercancel', stop, true);
       h.classList.remove('resize-handle--dragging');
       document.body.style.cursor = '';
-      localStorage.setItem(storageKey, String(widthRef.current));
+      writeStored(storageKey, widthRef.current);
       // Container width is fixed during a handle drag, so it's safe to read
       // straight from the DOM here.
       const cw = h.parentElement?.clientWidth ?? 0;

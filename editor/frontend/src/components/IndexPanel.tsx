@@ -28,7 +28,7 @@ function rowKey(r: Row): string {
 export default function IndexPanel({ basePath, showStatusFilter = true }: Props) {
   const { urlId: currentUrlId } = useParams<{ urlId: string }>();
   const navigate = useNavigate();
-  const { items: all, loaded } = useHeadwords();
+  const { items: all, loaded, error } = useHeadwords();
   const { width, handleRef, onPointerDown } = useHorizontalResize({
     storageKey: 'index-panel-width',
     initial: 240,
@@ -144,7 +144,9 @@ export default function IndexPanel({ basePath, showStatusFilter = true }: Props)
           )}
         </div>
         <div className="index-panel__meta">
-          {!loaded
+          {error
+            ? `Kunde inte ladda registret: ${error}`
+            : !loaded
             ? 'Laddar …'
             : (!hasTextQuery && !status)
               ? `${all.length} uppslagsord`

@@ -1,7 +1,7 @@
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api, ApiError } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { Entry, EntrySplitResult } from '../api/types';
 import { useHeadwords } from '../components/HeadwordsContext';
 import { snapToSplit, type SnapResult } from './splitOps';
@@ -31,11 +31,6 @@ function snapErrorMessage(snap: Exclude<SnapResult, { kind: 'ok' }>): string {
     case 'no-entry':
       return 'Hittade inte <entry>-elementet i editorn.';
   }
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
-  return String(err);
 }
 
 function Modal({

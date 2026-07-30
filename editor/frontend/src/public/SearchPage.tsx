@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { api, ApiError } from '../api/client';
+import { api, ApiError, errorMessage } from '../api/client';
 import type { SearchHit, SearchResults } from '../api/types';
 import { fold } from '../components/HeadwordsContext';
 import { plural } from '../components/plural';
@@ -71,11 +71,27 @@ export default function SearchPage() {
   const q = params.get('q') ?? '';
   const [input, setInput] = useState(q);
   const [data, setData] = useState<SearchResults | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setInput(q);
+    setError(null);
     if (!q) { setData(null); return; }
-    api.get<SearchResults>(`/search?q=${encodeURIComponent(q)}`).then(setData);
+    // `active` because two searches can be in flight while typing: without
+    // it the slower earlier response wins, so you end up looking at "ab"'s
+    // hits under ?q=abc — and then queryWords, derived from "abc", filters
+    // most of them out, making a query that has matches look empty.
+    let active = true;
+    api.get<SearchResults>(`/search?q=${encodeURIComponent(q)}`)
+      .then((r) => { if (active) setData(r); })
+      .catch((err) => {
+        if (!active) return;
+        // Without a catch this rejected unhandled and the page kept showing
+        // the previous query's results with no sign anything had failed.
+        setData(null);
+        setError(errorMessage(err));
+      });
+    return () => { active = false; };
   }, [q]);
 
   function onSubmit(e: FormEvent) {
@@ -124,6 +140,7 @@ export default function SearchPage() {
         <button type="button" onClick={onLookup}>Slå upp</button>
         <button type="submit">Sök i texten</button>
       </form>
+      {error && <p className="error">Sökningen misslyckades: {error}</p>}
       {data && (
         <>
           {lookupMissed && (

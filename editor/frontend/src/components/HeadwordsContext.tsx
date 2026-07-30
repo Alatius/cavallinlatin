@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { api } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { EntrySummary } from '../api/types';
 
 export interface FoldedEntry extends EntrySummary {
@@ -45,7 +45,11 @@ export function fold(s: string): string {
 
 interface HeadwordsContextValue {
   items: FoldedEntry[];
+  /** True once the fetch has settled, whether it succeeded or failed. */
   loaded: boolean;
+  /** Set when the index could not be fetched, so consumers can say so
+   *  instead of showing an empty list or a permanent "Laddar …". */
+  error: string | null;
   patch: (urlId: string, changes: Partial<EntrySummary>) => void;
   // Splice a new entry into the index right after `afterUrlId`, mirroring
   // the backend's sort_key insertion. Used by the split action so the new
@@ -74,13 +78,24 @@ export function HeadwordsProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<FoldedEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
-    api.get<EntrySummary[]>('/headwords').then((raw) => {
-      if (!active) return;
-      setItems(raw.map(enrich));
-      setLoaded(true);
-    });
+    api.get<EntrySummary[]>('/headwords')
+      .then((raw) => {
+        if (!active) return;
+        setItems(raw.map(enrich));
+        setLoaded(true);
+      })
+      // Without this the rejection was unhandled and `loaded` stayed false
+      // forever, so the index and the mobile search sat on "Laddar …" with no
+      // error and no retry — a hang rather than a failure.
+      .catch((err) => {
+        if (!active) return;
+        setError(errorMessage(err));
+        setLoaded(true);
+      });
     return () => { active = false; };
   }, []);
 
@@ -130,7 +145,7 @@ export function HeadwordsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ items, loaded, patch, insertAfter, remove }}>
+    <Ctx.Provider value={{ items, loaded, error, patch, insertAfter, remove }}>
       {children}
     </Ctx.Provider>
   );
