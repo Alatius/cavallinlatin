@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api, ApiError } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { RevisionContent, RevisionMeta } from '../api/types';
 
 export interface UseRevisionsResult {
@@ -30,7 +30,7 @@ export function useRevisions(urlId: string): UseRevisionsResult {
     api.get<RevisionMeta[]>(`/entries/${urlId}/revisions`)
       .then((rows) => { if (active) setList(rows); })
       .catch((err) => {
-        if (active) setListError(err instanceof ApiError ? err.message : String(err));
+        if (active) setListError(errorMessage(err));
       })
       .finally(() => { if (active) setLoadingList(false); });
     return () => { active = false; };

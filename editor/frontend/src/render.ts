@@ -144,7 +144,9 @@ export function entryXmlToHtml(xml: string, opts: RenderOptions = {}): string {
     }
 
     if (isClose) {
-      out += closeHtmlFor(tag);
+      // cb opens are force-closed below, so a paired </cb> must not emit a
+      // second (stray) close tag.
+      if (tag !== 'cb') out += closeHtmlFor(tag);
       continue;
     }
 
@@ -187,7 +189,9 @@ export function entryXmlToHtml(xml: string, opts: RenderOptions = {}): string {
     // final branch used to honour selfClose, so <ref target="#x"/> — legal
     // XML, and a natural thing to type — swallowed the entire rest of the
     // entry into one link. Same for <foreign/>, <b/> and <sense n="1"/>.
-    if (selfClose && !VOID_TAGS.has(tag)) out += closeHtmlFor(tag);
+    // cb is a milestone: force-close it even when typed as a bare <cb>, or
+    // the rest of the entry ends up inside the unclosed element.
+    if ((selfClose || tag === 'cb') && !VOID_TAGS.has(tag)) out += closeHtmlFor(tag);
   }
 
   out += emitText(xml, last, xml.length);

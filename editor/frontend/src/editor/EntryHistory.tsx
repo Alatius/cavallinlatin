@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
-import { ApiError, api } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { Entry, RevisionContent, RevisionMeta } from '../api/types';
 import Breadcrumb from '../components/Breadcrumb';
 import { formatDate } from '../components/formatDate';
@@ -84,7 +84,7 @@ export default function EntryHistory() {
         setAfterRev(a);
       })
       .catch((err) => {
-        if (active) setContentError(err instanceof ApiError ? err.message : String(err));
+        if (active) setContentError(errorMessage(err));
       });
     return () => { active = false; };
   }, [pair, getContent]);

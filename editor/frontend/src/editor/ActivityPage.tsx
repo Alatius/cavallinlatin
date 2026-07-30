@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, ApiError } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { ActivityItem } from '../api/types';
 import { formatDate } from '../components/formatDate';
 import { useStoredState } from '../components/useStoredState';
@@ -24,7 +24,7 @@ export default function ActivityPage() {
     api.get<ActivityItem[]>(`/activity/${tab}`)
       .then((rows) => { if (active) setItems(rows); })
       .catch((err) => {
-        if (active) setError(err instanceof ApiError ? err.message : String(err));
+        if (active) setError(errorMessage(err));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

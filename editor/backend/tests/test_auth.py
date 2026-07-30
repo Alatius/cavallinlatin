@@ -114,8 +114,27 @@ def test_login_rate_limit_counts_concurrent_attempts(client, reset_login_attempt
         client.post('/api/auth/login', json={
             'email': 'test@example.com', 'password': 'wrong',
         })
-    bucket = auth_router._LOGIN_ATTEMPTS.get('user:test@example.com', [])
+    bucket = auth_router._LOGIN_ATTEMPTS.get('ipuser:testclient:test@example.com', [])
     assert len(bucket) == auth_router._LOGIN_MAX_FAILURES
+
+
+def test_login_remote_failures_do_not_lock_out_the_account(client, reset_login_attempts):
+    """The account-scoped bucket is keyed jointly on (ip, email). Keying it on
+    the email alone let anyone who knew an editor's address lock them out from
+    every IP with ten wrong passwords, renewable indefinitely."""
+    from app import security
+    from app.routers import auth as auth_router
+    # An attacker elsewhere burns the limit against our email.
+    now = security.now()
+    auth_router._LOGIN_ATTEMPTS['ip:203.0.113.9'] = [now] * auth_router._LOGIN_MAX_FAILURES
+    auth_router._LOGIN_ATTEMPTS['ipuser:203.0.113.9:test@example.com'] = (
+        [now] * auth_router._LOGIN_MAX_FAILURES
+    )
+    # The real user, from their own IP, still gets in.
+    r = client.post('/api/auth/login', json={
+        'email': 'test@example.com', 'password': 'correctpass1234',
+    })
+    assert r.status_code == 200
 
 
 def test_login_password_length_is_capped(client, reset_login_attempts):

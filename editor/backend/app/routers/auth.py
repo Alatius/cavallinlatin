@@ -19,11 +19,18 @@ router = APIRouter()
 # state needed; a lock because the endpoint is sync and therefore runs on
 # Starlette's threadpool.
 #
-# Buckets are keyed 'ip:<addr>' AND 'user:<email>', and both must be under the
-# limit. The per-account bucket is what stops an attacker who can produce
+# Buckets are keyed 'ip:<addr>' AND 'ipuser:<addr>:<email>', and both must be
+# under the limit. The joint bucket is what stops an attacker who can produce
 # successful logins of their own — an invited editor guessing the admin's
 # password, say. Keying on IP alone let them reset the counter every tenth
-# guess by logging into their own account, since success forgives the whole IP.
+# guess by logging into their own account, since success forgives the whole
+# IP; the joint bucket survives that reset because success only forgives the
+# (ip, account) pair that actually logged in. Deliberately NOT keyed on the
+# account alone: that would let anyone who knows an editor's email lock them
+# out from every IP with a handful of wrong passwords, renewable forever.
+# The cost is that the joint bucket doesn't slow a distributed guesser down —
+# each new IP starts fresh — but that attacker was only ever bounded by the
+# per-IP bucket anyway.
 _LOGIN_ATTEMPTS: dict[str, list[int]] = {}
 _LOGIN_LOCK = threading.Lock()
 _LOGIN_WINDOW = 5 * 60  # seconds
@@ -80,9 +87,9 @@ def _check_and_record(keys: tuple[str, ...]) -> None:
 def _forget(keys: tuple[str, ...]) -> None:
     """Clear the buckets for a successful login.
 
-    Only the buckets belonging to *this* login: another account's bucket must
-    survive, or authenticating as yourself would reset the counter guarding
-    the account you are guessing at.
+    Only the buckets belonging to *this* login: another account's joint
+    bucket must survive, or authenticating as yourself would reset the
+    counter guarding the account you are guessing at.
     """
     with _LOGIN_LOCK:
         for key in keys:
@@ -91,7 +98,8 @@ def _forget(keys: tuple[str, ...]) -> None:
 
 @router.post('/login', response_model=UserOut)
 def login(data: LoginIn, response: Response, conn: Conn, request: Request):
-    keys = (f'ip:{_client_ip(request)}', f'user:{data.email.lower()}')
+    ip = _client_ip(request)
+    keys = (f'ip:{ip}', f'ipuser:{ip}:{data.email.lower()}')
     _check_and_record(keys)
 
     row = conn.execute(

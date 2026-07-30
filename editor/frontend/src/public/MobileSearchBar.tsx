@@ -21,7 +21,7 @@ interface Props {
 // folding/prefix-match logic as IndexPanel; we avoid pulling in IndexPanel
 // itself because its Virtuoso layout doesn't fit a dropdown.
 export default function MobileSearchBar({ basePath }: Props) {
-  const { items: all, loaded } = useHeadwords();
+  const { items: all, loaded, error } = useHeadwords();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -85,7 +85,10 @@ export default function MobileSearchBar({ basePath }: Props) {
       <input
         type="search"
         className="mobile-search__input"
-        placeholder={loaded ? 'Sök uppslagsord …' : 'Laddar …'}
+        placeholder={
+          error ? 'Registret kunde inte laddas'
+            : loaded ? 'Sök uppslagsord …' : 'Laddar …'
+        }
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
@@ -97,7 +100,11 @@ export default function MobileSearchBar({ basePath }: Props) {
       {showDropdown && (
         <ul className="dropdown-menu mobile-search__results" role="listbox">
           {shown.length === 0 && (
-            <li className="mobile-search__empty">Inga träffar</li>
+            // Distinguish a failed index fetch from a genuine miss, so a
+            // network error doesn't masquerade as "no such headword".
+            <li className="mobile-search__empty">
+              {error ? `Kunde inte ladda registret: ${error}` : 'Inga träffar'}
+            </li>
           )}
           {shown.map((h, i) => (
             <li

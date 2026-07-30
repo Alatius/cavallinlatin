@@ -163,10 +163,14 @@ def transaction(conn: sqlite3.Connection):
 # at all to the deployed one, and the app fails at runtime on the first query
 # that names it. deploy.sh has no migration step to notice the difference.
 #
-# Version 1 is the baseline: whatever SCHEMA above produces. Existing
-# databases report user_version 0 and are simply stamped, since they already
-# match. A future change means SCHEMA_VERSION = 2 plus MIGRATIONS[2] = (...),
-# with the SCHEMA text updated too so fresh databases skip the migration.
+# Version 1 is the baseline: whatever SCHEMA above produced at that point.
+# A future change means SCHEMA_VERSION = 2 plus MIGRATIONS[2] = (...), with
+# the SCHEMA text updated to match — SCHEMA always describes the *current*
+# shape. init_schema stamps a brand-new database straight to SCHEMA_VERSION
+# (executescript just built it in current shape, so the ladder must not run);
+# only databases that predate the ladder, or sit at an older stamped version,
+# climb it. Legacy pre-ladder databases report user_version 0 and are treated
+# as version 1, which they match by construction.
 SCHEMA_VERSION = 1
 MIGRATIONS: dict[int, tuple[str, ...]] = {}
 
@@ -179,6 +183,10 @@ def migrate(conn: sqlite3.Connection) -> None:
     # Only take the write lock when there is actually something to do —
     # init_schema runs on every connection.
     with transaction(conn):
+        # Re-read under the write lock: two connections starting up together
+        # can both see the stale version above, and the loser would re-apply
+        # statements the winner already committed.
+        version = conn.execute('PRAGMA user_version').fetchone()[0]
         for target in range(version + 1, SCHEMA_VERSION + 1):
             for stmt in MIGRATIONS.get(target, ()):
                 conn.execute(stmt)
@@ -187,8 +195,19 @@ def migrate(conn: sqlite3.Connection) -> None:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
+    # Distinguish a brand-new database from a legacy one *before* the schema
+    # runs: afterwards they look identical, but only the legacy one must
+    # climb the migration ladder. A fresh database is already at
+    # SCHEMA_VERSION by construction, and running the ladder on it would
+    # re-apply e.g. an ADD COLUMN the schema text already contains.
+    fresh = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'"
+    ).fetchone()[0] == 0
     conn.executescript(SCHEMA)
-    migrate(conn)
+    if fresh:
+        conn.execute(f'PRAGMA user_version = {int(SCHEMA_VERSION)}')
+    else:
+        migrate(conn)
 
 
 @contextmanager

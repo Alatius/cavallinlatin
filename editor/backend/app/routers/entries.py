@@ -749,9 +749,11 @@ def join_with_next(
 
         _snapshot_entry(conn, row['id'], user['user_id'], now)
         # Keep the absorbed entry's final body as a revision of the survivor,
-        # so the merge is reversible. Without it the row, its text and its
-        # whole history went out with the DELETE below and reverting the
-        # survivor brought back only half the article.
+        # so its text survives the DELETE below (which cascades away the row
+        # and its whole revision history) and can be recovered by hand. There
+        # is no automated revert, and the row is a wart in the survivor's
+        # timeline — the history view diffs it against the preceding snapshot
+        # as a whole-article replacement — but that beats losing the text.
         conn.execute(
             'INSERT INTO entry_revisions (entry_id, xml_body, status, user_id, created_at) '
             'VALUES (?, ?, ?, ?, ?)',

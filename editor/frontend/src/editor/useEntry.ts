@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api, ApiError } from '../api/client';
+import { api, ApiError, errorMessage } from '../api/client';
 import type { Comment, Entry, LockInfo, Status } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -82,7 +82,7 @@ export function useEntry(urlId: string): UseEntryResult {
         // would trip the clear-error-on-edit effect below and wipe the error
         // we're setting.
         setEntry(null);
-        setError(err instanceof ApiError ? err.message : String(err));
+        setError(errorMessage(err));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -97,7 +97,7 @@ export function useEntry(urlId: string): UseEntryResult {
       const e = await api.get<Entry>(`/entries/${urlId}`);
       apply(e);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -172,7 +172,7 @@ export function useEntry(urlId: string): UseEntryResult {
       setXml((cur) => (cur === sent ? e.xml_body : cur));
     } catch (err) {
       if (urlIdRef.current !== sentUrlId) return;
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -199,7 +199,7 @@ export function useEntry(urlId: string): UseEntryResult {
     api.get<Comment[]>(`/entries/${urlId}/comments`)
       .then((cs) => { if (active) setComments(cs); })
       .catch((err) => {
-        if (active) setCommentError(err instanceof ApiError ? err.message : String(err));
+        if (active) setCommentError(errorMessage(err));
       })
       .finally(() => { if (active) setLoadingComments(false); });
     return () => { active = false; };
@@ -217,7 +217,7 @@ export function useEntry(urlId: string): UseEntryResult {
       if (urlIdRef.current !== sentUrlId) return;
       setComments((prev) => [...prev, c]);
     } catch (err) {
-      setCommentError(err instanceof ApiError ? err.message : String(err));
+      setCommentError(errorMessage(err));
       throw err;
     }
   }, [urlId]);

@@ -109,8 +109,10 @@ def canonical_entry_xml(el: '_Element') -> str:
     one of those unrepresentable — lxml emits double-quoted attributes with
     '>' escaped, and folds CDATA into ordinary escaped text.
 
-    Verified byte-identical against the existing corpus, so adopting this does
-    not rewrite stored entries.
+    Verified against the existing corpus: byte-identical for all but 2 of
+    34,775 entries (jus1, jurisconsultus), which differ only by the trailing-
+    whitespace squeeze below and get normalized on their next save. Adopting
+    this does not otherwise rewrite stored entries.
     """
     xml = etree.tostring(el, encoding='unicode', with_tail=False)
     # Match import_xml, which squeezes whitespace before the close tag.

@@ -14,11 +14,9 @@ cd /var/www/cavallinlatin/editor
 sudo python3.12 -m venv backend/.venv
 sudo backend/.venv/bin/pip install -e .
 
-# Configure
+# Configure. The example file ships production-safe values (the session
+# cookie defaults to Secure); just check that nothing dev-only is uncommented.
 sudo cp .env.example .env
-# Edit .env:
-#   CAVALLIN_COOKIE_SECURE=true
-#   CAVALLIN_BASE_PATH=/cavallinlatin
 
 # Regenerate column PNGs from the committed TIFFs (~10–15 min on a small VPS,
 # produces ~170 MB under editor/data/columns/ — gitignored, so must be rebuilt

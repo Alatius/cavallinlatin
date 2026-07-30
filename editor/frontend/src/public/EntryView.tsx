@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { api, ApiError } from '../api/client';
+import { api, errorMessage } from '../api/client';
 import type { EntryGroup, EntryGroupItem } from '../api/types';
 import Breadcrumb from '../components/Breadcrumb';
 import type { ColumnHighlight } from '../components/ColumnImagePanel';
@@ -28,7 +28,7 @@ export default function EntryView() {
     api.get<EntryGroup>(`/entries/${urlId}/group`)
       .then((g) => { if (active) setGroup(g); })
       .catch((e) => {
-        if (active) setError(e instanceof ApiError ? e.message : String(e));
+        if (active) setError(errorMessage(e));
       });
     return () => { active = false; };
   }, [urlId]);

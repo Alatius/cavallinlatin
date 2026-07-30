@@ -1,4 +1,4 @@
-import { syntaxTree } from '@codemirror/language';
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import {
   EditorSelection, type ChangeSpec, type EditorState, type SelectionRange,
 } from '@codemirror/state';
@@ -429,9 +429,12 @@ export function tagOp(
   // 0. Preconditions. Every rule below reads the syntax tree, and that tree
   // is built incrementally: past the parsed frontier every lookup comes back
   // empty and the op silently degrades to a plain wrap, producing output that
-  // violates the schema. Entries longer than the frontier (394 of them) hit
-  // this, and which result you got depended on how far you had scrolled.
-  const tree = syntaxTree(state);
+  // violates the schema. Entries longer than CodeMirror's default work budget
+  // (394 of them) hit this, and which result you got depended on how far you
+  // had scrolled — so force the parse up to the selection first. 100 ms is
+  // orders of magnitude more than the largest entry (21 kB) needs; the null
+  // fallback is a safety net, not an expected path.
+  const tree = ensureSyntaxTree(state, range.to, 100) ?? syntaxTree(state);
   if (tree.length < range.to) return null;
   // Endpoints strictly inside markup — a tag name, an attribute value, a
   // comment — would otherwise have a tag inserted into them, e.g.
