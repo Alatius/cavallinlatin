@@ -317,12 +317,20 @@ def test_join_creates_revision(auth_client):
     r = auth_client.post('/api/entries/jRevL/join-next')
     assert r.status_code == 200, r.text
     with db.get_conn() as conn:
-        after = conn.execute(
-            'SELECT COUNT(*) AS n FROM entry_revisions r '
-            'JOIN entries e ON e.id = r.entry_id WHERE e.url_id = ?',
-            ('jRevL',),
-        ).fetchone()['n']
-    assert after - before == 1
+        bodies = [
+            row['xml_body'] for row in conn.execute(
+                'SELECT r.xml_body FROM entry_revisions r '
+                'JOIN entries e ON e.id = r.entry_id WHERE e.url_id = ? '
+                'ORDER BY r.id',
+                ('jRevL',),
+            )
+        ]
+    # Two: the survivor's own pre-merge body, and the absorbed entry's final
+    # body. The second is what makes the merge reversible — the absorbed row
+    # is hard-deleted, so without it that half of the article is gone.
+    assert len(bodies) - before == 2
+    assert '<orth>jRevL</orth>L</entry>' in bodies[-2]
+    assert '<orth>jRevR</orth>R</entry>' in bodies[-1]
 
 
 def test_join_unauthenticated(client):
@@ -338,3 +346,97 @@ def test_join_unauthenticated(client):
     )
     r = client.post('/api/entries/jAuthL/join-next')
     assert r.status_code == 401
+
+
+# -----------------------------------------------------------------------------
+# Concurrency expectations and group integrity
+# -----------------------------------------------------------------------------
+
+
+def test_split_of_proper_entry_keeps_the_halves_linked(auth_client):
+    """'proper' heads its own group exactly like 'primary', so the split-off
+    half must point at the source's id. Treating only 'primary' as a head left
+    the new entry with root=None: a group of one, with no breadcrumb."""
+    body = ('<entry id="propSrc" type="proper"><orth>Alpha</orth>A'
+            '<orth>Beta</orth>B</entry>')
+    _seed_entry('propSrc', body, sort_key=31_000, entry_type='proper')
+    r = auth_client.post('/api/entries/propSrc/split',
+                         json={'offset': body.index('<orth>Beta')})
+    assert r.status_code == 200, r.text
+    new_id = r.json()['new_entry']['url_id']
+
+    group = auth_client.get(f'/api/entries/{new_id}/group').json()
+    assert group['head_url_id'] == 'propSrc'
+    assert [i['url_id'] for i in group['items']] == ['propSrc', new_id]
+
+
+def test_split_advances_status_from_untouched(auth_client):
+    body = ('<entry id="stSrc" type="primary"><orth>s1</orth>A'
+            '<orth>s2</orth>B</entry>')
+    _seed_entry('stSrc', body, sort_key=31_100)
+    r = auth_client.post('/api/entries/stSrc/split',
+                         json={'offset': body.index('<orth>s2')})
+    assert r.status_code == 200, r.text
+    assert r.json()['source_entry']['status'] == 'in_progress'
+    assert r.json()['new_entry']['status'] == 'in_progress'
+    # And it's persisted, not just reported.
+    assert auth_client.get('/api/entries/stSrc').json()['status'] == 'in_progress'
+
+
+def test_split_rejects_stale_expected_updated_at(auth_client):
+    """The offset is computed in the browser against its own copy of the body,
+    so applying it to a body that has moved on cuts at a position the user
+    never previewed."""
+    body = ('<entry id="staleSp" type="primary"><orth>a</orth>A'
+            '<orth>b</orth>B</entry>')
+    _seed_entry('staleSp', body, sort_key=31_200)
+    r = auth_client.post('/api/entries/staleSp/split', json={
+        'offset': body.index('<orth>b</orth>'),
+        'expected_updated_at': 1,
+    })
+    assert r.status_code == 409
+
+
+def test_join_rejects_when_next_is_not_the_expected_one(auth_client):
+    """`next` is resolved server-side at request time, so without this the
+    entry deleted can differ from the one the confirmation dialog named."""
+    _seed_entry('jExpL', '<entry id="jExpL" type="primary"><orth>l</orth>L</entry>',
+                sort_key=31_300)
+    _seed_entry('jExpR', '<entry id="jExpR" type="primary"><orth>r</orth>R</entry>',
+                sort_key=31_400)
+    r = auth_client.post('/api/entries/jExpL/join-next',
+                         json={'expected_next_url_id': 'somethingelse'})
+    assert r.status_code == 409
+    # Nothing was deleted.
+    assert auth_client.get('/api/entries/jExpR').status_code == 200
+
+
+def test_join_moves_comments_to_the_survivor(auth_client):
+    _seed_entry('jComL', '<entry id="jComL" type="primary"><orth>l</orth>L</entry>',
+                sort_key=31_500)
+    _seed_entry('jComR', '<entry id="jComR" type="primary"><orth>r</orth>R</entry>',
+                sort_key=31_600)
+    assert auth_client.post('/api/entries/jComR/comments',
+                            json={'body': 'note about the absorbed half'}).status_code == 201
+
+    assert auth_client.post('/api/entries/jComL/join-next', json={}).status_code == 200
+
+    bodies = [c['body'] for c in auth_client.get('/api/entries/jComL/comments').json()]
+    assert 'note about the absorbed half' in bodies
+
+
+def test_join_refuses_to_orphan_derivatives(auth_client):
+    """Deleting an entry that heads derivatives would leave their `root`
+    pointing at an id that no longer resolves."""
+    _seed_entry('jDepL', '<entry id="jDepL" type="primary"><orth>l</orth>L</entry>',
+                sort_key=31_700)
+    _seed_entry('jDepR', '<entry id="jDepR" type="primary"><orth>r</orth>R</entry>',
+                sort_key=31_800)
+    _seed_entry('jDepKid', '<entry id="jDepKid" type="derived" root="jDepR">'
+                           '<orth>kid</orth>K</entry>',
+                sort_key=31_900, xml_root='jDepR')
+
+    r = auth_client.post('/api/entries/jDepL/join-next', json={})
+    assert r.status_code == 409
+    assert 'jDepKid' in r.text
+    assert auth_client.get('/api/entries/jDepR').status_code == 200

@@ -149,6 +149,19 @@ class EntrySplitIn(BaseModel):
     # rejects offsets that produce malformed halves or a second half that
     # lacks an <orth>.
     offset: int = Field(ge=0)
+    # The updated_at the offset was computed against. Without it a body that
+    # changed since the preview can be cut at a position the user never saw —
+    # and only when the offset happens to land on an element boundary in the
+    # new text, so it fails silently rather than loudly.
+    expected_updated_at: int | None = None
+
+
+class EntryJoinIn(BaseModel):
+    expected_updated_at: int | None = None
+    # Which entry the client believes is next. The server resolves "next" by
+    # sort_key at request time, so without this the entry actually deleted
+    # can differ from the one the confirmation dialog named.
+    expected_next_url_id: str | None = None
 
 
 class EntrySplitOut(BaseModel):

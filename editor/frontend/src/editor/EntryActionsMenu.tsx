@@ -137,7 +137,13 @@ export default function EntryActionsMenu({
     try {
       const out = await api.post<EntrySplitResult>(
         `/entries/${entry.url_id}/split`,
-        { offset: splitState.snap.offset },
+        {
+          offset: splitState.snap.offset,
+          // The offset indexes the body this component previewed. Tell the
+          // server which version that was, so a body that changed underneath
+          // us is refused rather than cut at a position nobody saw.
+          expected_updated_at: entry.updated_at,
+        },
       );
       // Skip comment_count: the backend can't cheaply provide it and we
       // mustn't clobber the existing count with a stale 0.
@@ -157,7 +163,16 @@ export default function EntryActionsMenu({
     if (joinState.phase !== 'confirm' || !entry) return;
     setJoinState({ ...joinState, busy: true, error: null });
     try {
-      const merged = await api.post<Entry>(`/entries/${entry.url_id}/join-next`);
+      const merged = await api.post<Entry>(
+        `/entries/${entry.url_id}/join-next`,
+        {
+          expected_updated_at: entry.updated_at,
+          // The server resolves "next" itself, so name the entry this dialog
+          // said it would delete — otherwise an entry inserted in between by
+          // another editor gets absorbed instead.
+          expected_next_url_id: joinState.nextUrlId,
+        },
+      );
       remove(joinState.nextUrlId);
       patch(merged.url_id, {
         headword: merged.headword,
@@ -272,6 +287,8 @@ export default function EntryActionsMenu({
               Innehållet i "{joinState.nextHeadword}" läggs sist i denna post,
               och "{joinState.nextHeadword}" raderas. Korsreferenser med
               {' '}<code>target="{joinState.nextUrlId}"</code> kommer att brytas.
+              Kommentarer följer med hit, och den raderade postens text sparas
+              i historiken så att sammanslagningen går att ångra.
             </p>
             {joinState.error && (
               <div className="entry-actions-modal__error">{joinState.error}</div>

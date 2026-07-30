@@ -13,12 +13,13 @@ from lxml import etree
 from .. import config, db, security
 from ..deps import Conn, CurrentUser, Editor
 from ..models import (
-    ENTRY_TYPES, EntryGroupItem, EntryGroupOut, EntryList, EntryOut,
-    EntrySaveIn, EntrySplitIn, EntrySplitOut, EntrySummary, LockInfo,
-    RevisionContent, RevisionMeta,
+    ENTRY_TYPES, EntryGroupItem, EntryGroupOut, EntryJoinIn, EntryList,
+    EntryOut, EntrySaveIn, EntrySplitIn, EntrySplitOut, EntrySummary,
+    LockInfo, RevisionContent, RevisionMeta,
 )
 from ..text import (
-    canonical_entry_xml, derive_entry_fields, derive_xml_id_base, fold, orth_texts,
+    DerivedFields, canonical_entry_xml, derive_entry_fields, derive_xml_id_base,
+    fold, orth_texts,
 )
 from ..xml_parsing import SAFE_XML_PARSER
 
@@ -69,6 +70,64 @@ def _snapshot_entry(conn: sqlite3.Connection, entry_id: int, user_id: int, now: 
         'INSERT INTO entry_revisions (entry_id, xml_body, status, user_id, created_at) '
         'SELECT id, xml_body, status, ?, ? FROM entries WHERE id = ?',
         (user_id, now, entry_id),
+    )
+
+
+def _ensure_unchanged(row: sqlite3.Row, expected_updated_at: int | None) -> None:
+    """409 if the row moved on since the client last read it.
+
+    Optional so admin tooling and tests can opt out, matching save_entry.
+    """
+    if expected_updated_at is not None and expected_updated_at != row['updated_at']:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            'Posten har ändrats sedan du laddade den; ladda om för att se '
+            'den senaste versionen.',
+        )
+
+
+def _bump_status(current: str, requested: str) -> str:
+    """An edit means the entry is no longer untouched.
+
+    Only bumps when the caller isn't asking for something specific, so an
+    explicit downgrade from approved back to untouched still works.
+    """
+    if current == 'untouched' and requested == 'untouched':
+        return 'in_progress'
+    return requested
+
+
+def _write_entry_fields(
+    conn: sqlite3.Connection, entry_id: int, *,
+    xml_body: str, fields: DerivedFields, entry_type: str,
+    xml_id: str | None, xml_root: str | None,
+    starting_column: str | None, status: str,
+    now: int, user_id: int,
+) -> None:
+    """Write an entry's body together with every column derived from it.
+
+    Save, split and join each used to hand-write their own UPDATE over a
+    different subset of these columns, and the differences were accidental
+    rather than intended: join never touched type/xml_id/xml_root/
+    starting_column/first_orth_y, split never touched type or status, and
+    only save applied the untouched->in_progress bump — so an entry
+    reorganised by split or join stayed "untouched" and the work was
+    invisible to the status filter and the progress view. One writer keeps
+    the three paths in sync by construction.
+
+    Also refreshes the caller's lock: every path through here is an edit the
+    user just made, so they should keep holding it.
+    """
+    conn.execute(
+        'UPDATE entries SET xml_body = ?, plaintext = ?, headword = ?, '
+        'headword_sort = ?, alt_headwords = ?, starting_column = ?, '
+        'first_orth_y = ?, type = ?, xml_id = ?, xml_root = ?, status = ?, '
+        'updated_at = ?, lock_user_id = ?, lock_expires_at = ? '
+        'WHERE id = ?',
+        (xml_body, fields.plaintext, fields.headword, fields.headword_sort,
+         json.dumps(fields.alt_headwords, ensure_ascii=False),
+         starting_column, fields.first_orth_y, entry_type, xml_id, xml_root,
+         status, now, user_id, now + config.LOCK_TTL_SECONDS, entry_id),
     )
 
 
@@ -409,12 +468,17 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
         # Auto-advance from untouched on first save: the editor opened and
         # saved this entry, so by definition it's no longer untouched. Keep
         # the rule on the server so the UI doesn't have to know about it.
-        new_status = data.status
-        if row['status'] == 'untouched' and new_status == 'untouched':
-            new_status = 'in_progress'
+        new_status = _bump_status(row['status'], data.status)
 
         if xml_body == row['xml_body'] and new_status == row['status']:
-            pass
+            # Nothing to write, but the user is demonstrably still working on
+            # this entry, so keep their lock alive. Letting it lapse here made
+            # the response report no lock, which stopped the frontend
+            # keepalive and left the entry grabbable mid-edit.
+            conn.execute(
+                'UPDATE entries SET lock_user_id = ?, lock_expires_at = ? WHERE id = ?',
+                (user['user_id'], now + config.LOCK_TTL_SECONDS, row['id']),
+            )
         else:
             # If no <cb/> precedes the first <orth>, keep the stored
             # starting_column — set during import from running-column state
@@ -422,17 +486,11 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
             starting_column = fields.leading_cb or row['starting_column']
 
             _snapshot_entry(conn, row['id'], user['user_id'], now)
-            conn.execute(
-                'UPDATE entries SET xml_body = ?, plaintext = ?, headword = ?, '
-                'headword_sort = ?, alt_headwords = ?, starting_column = ?, '
-                'first_orth_y = ?, type = ?, xml_id = ?, xml_root = ?, status = ?, '
-                'updated_at = ?, lock_user_id = ?, lock_expires_at = ? '
-                'WHERE id = ?',
-                (xml_body, fields.plaintext, fields.headword, fields.headword_sort,
-                 json.dumps(fields.alt_headwords, ensure_ascii=False),
-                 starting_column, fields.first_orth_y, entry_type, xml_id, xml_root,
-                 new_status, now, user['user_id'], now + config.LOCK_TTL_SECONDS,
-                 row['id']),
+            _write_entry_fields(
+                conn, row['id'], xml_body=xml_body, fields=fields,
+                entry_type=entry_type, xml_id=xml_id, xml_root=xml_root,
+                starting_column=starting_column, status=new_status,
+                now=now, user_id=user['user_id'],
             )
 
     return _entry_response(url_id, conn, user)
@@ -449,13 +507,19 @@ def split_entry(url_id: str, data: EntrySplitIn, conn: Conn, user: Editor):
     with db.transaction(conn):
         row = conn.execute(
             'SELECT id, lock_user_id, lock_expires_at, xml_body, xml_id, '
-            'xml_root, type, sort_key, status, starting_column '
+            'xml_root, type, sort_key, status, starting_column, updated_at '
             'FROM entries WHERE url_id = ?',
             (url_id,),
         ).fetchone()
         if not row:
             raise HTTPException(status.HTTP_404_NOT_FOUND)
         _ensure_lock_free_for(row, user['user_id'], now, 'Låst av en annan redigerare')
+        # `offset` is a character position the browser computed against its
+        # own copy of the body. If the body has moved on since (a lapsed lock
+        # plus another editor's save), an offset that happens to land on an
+        # element boundary in the new text splits it somewhere the user never
+        # previewed — silently, with 200.
+        _ensure_unchanged(row, data.expected_updated_at)
 
         xml_body: str = row['xml_body']
         inner_from, inner_to = _entry_inner_bounds(xml_body)
@@ -501,10 +565,18 @@ def split_entry(url_id: str, data: EntrySplitIn, conn: Conn, user: Editor):
             )
         new_id = _next_free_url_id(conn, base_id)
 
-        # type=derived; root follows the user's rule: own id if source is
-        # primary, else inherit the source's root (which may be None for
-        # plain/reference entries — we drop the attribute in that case).
-        new_root = row['xml_id'] if row['type'] == 'primary' else row['xml_root']
+        # type=derived; root follows the user's rule: own id if the source
+        # heads its own group, else inherit the source's root, falling back to
+        # the source's own id so the halves stay linked.
+        #
+        # get_entry_group treats 'proper' as a head exactly like 'primary', so
+        # excluding it here left the split-off half of a proper noun with
+        # root=None: a group of one, unreachable from the entry it was split
+        # out of, and with no breadcrumb.
+        new_root = (
+            row['xml_id'] if row['type'] in ('primary', 'proper')
+            else (row['xml_root'] or row['xml_id'])
+        )
         root_attr = f' root="{html_escape(new_root, quote=True)}"' if new_root else ''
         new_xml = (
             f'<entry id="{html_escape(new_id, quote=True)}"'
@@ -544,18 +616,16 @@ def split_entry(url_id: str, data: EntrySplitIn, conn: Conn, user: Editor):
         # starting column; we don't carry running-column state per-entry.
         new_starting_col = new_fields.leading_cb or row['starting_column']
 
+        # Splitting an entry is editorial work, so it advances the status the
+        # same way a save does. Both halves get the result.
+        new_status = _bump_status(row['status'], row['status'])
+
         _snapshot_entry(conn, row['id'], user['user_id'], now)
-        conn.execute(
-            'UPDATE entries SET xml_body = ?, plaintext = ?, headword = ?, '
-            'headword_sort = ?, alt_headwords = ?, starting_column = ?, '
-            'first_orth_y = ?, updated_at = ?, '
-            'lock_user_id = ?, lock_expires_at = ? '
-            'WHERE id = ?',
-            (first_xml, first_fields.plaintext, first_fields.headword,
-             first_fields.headword_sort,
-             json.dumps(first_fields.alt_headwords, ensure_ascii=False),
-             first_starting_col, first_fields.first_orth_y, now,
-             user['user_id'], now + config.LOCK_TTL_SECONDS, row['id']),
+        _write_entry_fields(
+            conn, row['id'], xml_body=first_xml, fields=first_fields,
+            entry_type=row['type'], xml_id=row['xml_id'], xml_root=row['xml_root'],
+            starting_column=first_starting_col, status=new_status,
+            now=now, user_id=user['user_id'],
         )
         # The new entry inherits status from the source (the user has been
         # editing it; treating the split-off half as untouched would be
@@ -571,7 +641,7 @@ def split_entry(url_id: str, data: EntrySplitIn, conn: Conn, user: Editor):
              new_fields.headword_sort,
              json.dumps(new_fields.alt_headwords, ensure_ascii=False),
              new_starting_col, new_fields.first_orth_y,
-             row['status'], new_xml, new_fields.plaintext, new_sort_key,
+             new_status, new_xml, new_fields.plaintext, new_sort_key,
              user['user_id'], now + config.LOCK_TTL_SECONDS, now, now),
         )
 
@@ -579,38 +649,45 @@ def split_entry(url_id: str, data: EntrySplitIn, conn: Conn, user: Editor):
         source_entry=EntrySummary(
             url_id=url_id, headword=first_fields.headword,
             alt_headwords=first_fields.alt_headwords,
-            type=row['type'], status=row['status'], comment_count=0,
+            type=row['type'], status=new_status, comment_count=0,
         ),
         new_entry=EntrySummary(
             url_id=new_id, headword=new_fields.headword,
             alt_headwords=new_fields.alt_headwords,
-            type='derived', status=row['status'], comment_count=0,
+            type='derived', status=new_status, comment_count=0,
         ),
     )
 
 
 @router.post('/{url_id}/join-next', response_model=EntryOut)
-def join_with_next(url_id: str, conn: Conn, user: Editor):
+def join_with_next(
+    url_id: str, conn: Conn, user: Editor, data: EntryJoinIn | None = None,
+):
     """Absorb the entry immediately following `url_id` (by sort_key) into
     this one. The next entry's inner content — including its <orth>, which
     becomes a secondary headword — is appended to this entry's body, and
     the next entry's row is hard-deleted. Cross-refs pointing at the
     absorbed entry are not rewritten; broken refs are accepted as the cost
     of a rare operation."""
+    # Body stays optional so a bare POST still works for admin/curl use; the
+    # editor sends both expectations.
+    opts = data or EntryJoinIn()
     now = security.now()
     with db.transaction(conn):
         row = conn.execute(
             'SELECT id, lock_user_id, lock_expires_at, xml_body, sort_key, '
-            'status, starting_column FROM entries WHERE url_id = ?',
+            'status, starting_column, type, xml_id, xml_root, updated_at '
+            'FROM entries WHERE url_id = ?',
             (url_id,),
         ).fetchone()
         if not row:
             raise HTTPException(status.HTTP_404_NOT_FOUND)
         _ensure_lock_free_for(row, user['user_id'], now, 'Låst av en annan redigerare')
+        _ensure_unchanged(row, opts.expected_updated_at)
 
         next_row = conn.execute(
             'SELECT id, url_id, headword, lock_user_id, lock_expires_at, '
-            'xml_body FROM entries WHERE sort_key > ? '
+            'xml_body, xml_id FROM entries WHERE sort_key > ? '
             'ORDER BY sort_key ASC LIMIT 1',
             (row['sort_key'],),
         ).fetchone()
@@ -619,10 +696,36 @@ def join_with_next(url_id: str, conn: Conn, user: Editor):
                 status.HTTP_400_BAD_REQUEST,
                 'Det finns ingen efterföljande post att slå ihop med',
             )
+        # Which entry is "next" is resolved here, not by the client, so the
+        # entry actually deleted can differ from the one the confirmation
+        # dialog named — another editor splitting or creating an entry in
+        # between is enough. Make the client state which one it meant.
+        if (opts.expected_next_url_id is not None
+                and opts.expected_next_url_id != next_row['url_id']):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f'Nästa post är nu {next_row["url_id"]}, inte '
+                f'{opts.expected_next_url_id}; ladda om och försök igen.',
+            )
         _ensure_lock_free_for(
             next_row, user['user_id'], now,
             f'Nästa post ({next_row["headword"]}) är låst av en annan redigerare',
         )
+        # Deleting an entry that heads derivatives would strand them: their
+        # `root` would point at an id that no longer resolves, so they'd drop
+        # out of their group with no breadcrumb.
+        if next_row['xml_id']:
+            dependants = conn.execute(
+                'SELECT url_id FROM entries WHERE xml_root = ? AND id <> ? LIMIT 1',
+                (next_row['xml_id'], next_row['id']),
+            ).fetchone()
+            if dependants:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    f'Nästa post ({next_row["headword"]}) har avledningar som '
+                    f'pekar på den (t.ex. {dependants["url_id"]}); flytta dem '
+                    f'först.',
+                )
 
         cur_body: str = row['xml_body']
         next_body: str = next_row['xml_body']
@@ -642,18 +745,33 @@ def join_with_next(url_id: str, conn: Conn, user: Editor):
             )
 
         merged = derive_entry_fields(merged_el, headword_fallback=url_id)
+        merged_status = _bump_status(row['status'], row['status'])
 
         _snapshot_entry(conn, row['id'], user['user_id'], now)
+        # Keep the absorbed entry's final body as a revision of the survivor,
+        # so the merge is reversible. Without it the row, its text and its
+        # whole history went out with the DELETE below and reverting the
+        # survivor brought back only half the article.
         conn.execute(
-            'UPDATE entries SET xml_body = ?, plaintext = ?, headword = ?, '
-            'headword_sort = ?, alt_headwords = ?, updated_at = ?, '
-            'lock_user_id = ?, lock_expires_at = ? '
-            'WHERE id = ?',
-            (merged_xml, merged.plaintext, merged.headword, merged.headword_sort,
-             json.dumps(merged.alt_headwords, ensure_ascii=False), now,
-             user['user_id'], now + config.LOCK_TTL_SECONDS, row['id']),
+            'INSERT INTO entry_revisions (entry_id, xml_body, status, user_id, created_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (row['id'], next_row['xml_body'], row['status'], user['user_id'], now),
         )
-        # ON DELETE CASCADE drops the absorbed entry's revisions and comments.
+        # Discussion about the absorbed text belongs with the text, which now
+        # lives here. Otherwise ON DELETE CASCADE silently threw it away.
+        conn.execute(
+            'UPDATE entry_comments SET entry_id = ? WHERE entry_id = ?',
+            (row['id'], next_row['id']),
+        )
+        _write_entry_fields(
+            conn, row['id'], xml_body=merged_xml, fields=merged,
+            entry_type=row['type'], xml_id=row['xml_id'], xml_root=row['xml_root'],
+            # The merged entry still begins where it began; a <cb/> arriving
+            # from the absorbed half doesn't move its start.
+            starting_column=row['starting_column'], status=merged_status,
+            now=now, user_id=user['user_id'],
+        )
+        # ON DELETE CASCADE drops the absorbed entry's remaining revisions.
         conn.execute('DELETE FROM entries WHERE id = ?', (next_row['id'],))
 
     return _entry_response(url_id, conn, user)
