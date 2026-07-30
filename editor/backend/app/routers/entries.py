@@ -17,15 +17,19 @@ from ..models import (
     EntrySaveIn, EntrySplitIn, EntrySplitOut, EntrySummary, LockInfo,
     RevisionContent, RevisionMeta,
 )
-from ..text import derive_entry_fields, derive_xml_id_base, fold
+from ..text import (
+    canonical_entry_xml, derive_entry_fields, derive_xml_id_base, fold, orth_texts,
+)
 from ..xml_parsing import SAFE_XML_PARSER
 
 
 # Matches the opening tag of the root <entry> element in a saved xml_body.
-# xml_body is always serialized starting with the entry tag, so an anchored
-# regex is sufficient. Attribute values may contain &gt; (escaped), so a
-# literal '>' inside the attrs section never trips this.
-_ENTRY_OPEN_RE = re.compile(r'<entry\b[^>]*>')
+# xml_body is always canonically serialized (see canonical_entry_xml), so an
+# anchored regex is sufficient and lxml has escaped any '>' in an attribute
+# value. The alternation skips over quoted values anyway, so this stays
+# correct even if a body somehow predates that guarantee — a bare [^>]*
+# stopped at the wrong '>' and made join splice markup into the text.
+_ENTRY_OPEN_RE = re.compile(r'<entry\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>')
 _ENTRY_CLOSE = '</entry>'
 
 
@@ -341,16 +345,22 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
         )
     # Import skips entries without <orth>, so the editor shouldn't be able
     # to save into that state either: no orth means no headword, no sort
-    # key, and no FTS index target.
-    if el.find('.//orth') is None:
+    # key, and no FTS index target. Checked via orth_texts rather than
+    # find('.//orth') because a blank <orth> yields no headword either, and
+    # would silently fall back to using the internal url_id as the headword.
+    if not orth_texts(el):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            'Posten måste innehålla minst ett <orth>-element',
+            'Posten måste innehålla minst ett <orth>-element med text',
         )
 
     fields = derive_entry_fields(el, headword_fallback=url_id)
     xml_root = el.get('root')
     xml_id = el.get('id')
+    # Store the serialization of what we just parsed, never the client's
+    # string: see canonical_entry_xml for the shape invariants that depend
+    # on it.
+    xml_body = canonical_entry_xml(el)
 
     now = security.now()
 
@@ -366,6 +376,23 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
         if not row:
             raise HTTPException(status.HTTP_404_NOT_FOUND)
         _ensure_lock_free_for(row, user['user_id'], now, 'Låst av en annan redigerare')
+
+        # `id` is how every other entry's `root` addresses this one, and
+        # import derives url_id from it, so a duplicate makes group membership
+        # ambiguous (the root lookups are LIMIT 1 with no ORDER BY) and makes
+        # the next export unimportable on the url_id UNIQUE constraint. split
+        # already guards this via _next_free_url_id; save didn't.
+        if xml_id is not None:
+            clash = conn.execute(
+                'SELECT url_id FROM entries '
+                'WHERE (xml_id = ? OR url_id = ?) AND id <> ? LIMIT 1',
+                (xml_id, xml_id, row['id']),
+            ).fetchone()
+            if clash:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    f'id="{xml_id}" används redan av posten {clash["url_id"]}',
+                )
 
         # Optimistic concurrency: if the client supplied the updated_at it
         # last saw and the row has moved on, refuse the save so a stale draft
@@ -386,7 +413,7 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
         if row['status'] == 'untouched' and new_status == 'untouched':
             new_status = 'in_progress'
 
-        if data.xml_body == row['xml_body'] and new_status == row['status']:
+        if xml_body == row['xml_body'] and new_status == row['status']:
             pass
         else:
             # If no <cb/> precedes the first <orth>, keep the stored
@@ -401,7 +428,7 @@ def save_entry(url_id: str, data: EntrySaveIn, conn: Conn, user: Editor):
                 'first_orth_y = ?, type = ?, xml_id = ?, xml_root = ?, status = ?, '
                 'updated_at = ?, lock_user_id = ?, lock_expires_at = ? '
                 'WHERE id = ?',
-                (data.xml_body, fields.plaintext, fields.headword, fields.headword_sort,
+                (xml_body, fields.plaintext, fields.headword, fields.headword_sort,
                  json.dumps(fields.alt_headwords, ensure_ascii=False),
                  starting_column, fields.first_orth_y, entry_type, xml_id, xml_root,
                  new_status, now, user['user_id'], now + config.LOCK_TTL_SECONDS,

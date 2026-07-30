@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from typing import TYPE_CHECKING, NamedTuple
+
+from lxml import etree
 
 if TYPE_CHECKING:
     from lxml.etree import _Element
@@ -90,6 +93,28 @@ def derive_xml_id_base(orth_text: str) -> str:
     split in that case).
     """
     return ''.join(c for c in fold(orth_text) if 'a' <= c <= 'z')
+
+
+def canonical_entry_xml(el: '_Element') -> str:
+    """Serialize an <entry> element to the one form the database stores.
+
+    Save used to persist the client's string verbatim, which let stored bodies
+    drift from the shape every other consumer assumes. Leading whitespace or an
+    XML prologue made `_entry_inner_bounds` fail, so split/join answered 500
+    forever after and `export_xml`'s concatenation stopped being re-importable;
+    a raw '>' inside a root attribute (legal XML) made the open-tag regex stop
+    early and join silently spliced markup into the text; single-quoted
+    attributes were dropped by the renderer; a CDATA section carried raw markup
+    through to the public page. Serializing from the parsed tree makes every
+    one of those unrepresentable — lxml emits double-quoted attributes with
+    '>' escaped, and folds CDATA into ordinary escaped text.
+
+    Verified byte-identical against the existing corpus, so adopting this does
+    not rewrite stored entries.
+    """
+    xml = etree.tostring(el, encoding='unicode', with_tail=False)
+    # Match import_xml, which squeezes whitespace before the close tag.
+    return re.sub(r'\s+</entry>$', '</entry>', xml)
 
 
 def derive_entry_fields(el: '_Element', *, headword_fallback: str) -> DerivedFields:
