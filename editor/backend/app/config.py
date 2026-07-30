@@ -25,7 +25,11 @@ XML_PATH = _path('CAVALLIN_XML_PATH', 'data/cavallinlatin.xml')
 # operator wrote the env var as '/cavallinlatin/'.
 BASE_PATH = os.environ.get('CAVALLIN_BASE_PATH', '/cavallinlatin').rstrip('/')
 COOKIE_NAME = os.environ.get('CAVALLIN_COOKIE_NAME', 'cavallin_session')
-COOKIE_SECURE = os.environ.get('CAVALLIN_COOKIE_SECURE', 'false').lower() == 'true'
+# Secure by default: the runbook says to copy .env.example and edit it, and
+# missing that edit meant a 30-day session token going out over plaintext on
+# any pre-HSTS first visit. Dev opts out explicitly (.env.example ships
+# false), which is the direction that should require an action.
+COOKIE_SECURE = os.environ.get('CAVALLIN_COOKIE_SECURE', 'true').lower() != 'false'
 
 SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60
 LOCK_TTL_SECONDS = 15 * 60

@@ -4,6 +4,10 @@ Downsamples to 50% linear scale and keeps 1-bit bilevel encoding via
 Floyd-Steinberg dithering, so files stay small while text remains crisp
 at display size. Browsers antialias 1-bit PNGs when CSS-scaled.
 Idempotent: skips files already present in the destination unless --force.
+
+Existing data/columns/*.png predate the greyscale step in convert_one and
+were effectively nearest-neighbour decimated; re-run with --force to replace
+them (~18% larger files, noticeably cleaner text).
 """
 
 from __future__ import annotations
@@ -23,7 +27,14 @@ def convert_one(src: Path, dst: Path) -> int:
     with Image.open(src) as img:
         w, h = img.size
         new_size = (max(1, round(w * SCALE)), max(1, round(h * SCALE)))
-        resized = img.resize(new_size, Image.LANCZOS)
+        # Convert to greyscale *before* resizing. The sources are group-4
+        # bilevel (mode '1'), and PIL silently falls back to NEAREST for mode
+        # '1' regardless of the filter you ask for — and convert('1') on an
+        # already-bilevel image has nothing to dither. So both halves of this
+        # pipeline were no-ops and the whole corpus was decimated with
+        # nearest-neighbour, the worst possible choice for text.
+        grey = img.convert('L')
+        resized = grey.resize(new_size, Image.LANCZOS)
         bilevel = resized.convert('1', dither=Image.Dither.FLOYDSTEINBERG)
         dst.parent.mkdir(parents=True, exist_ok=True)
         bilevel.save(dst, format='PNG', optimize=True)

@@ -154,8 +154,41 @@ def transaction(conn: sqlite3.Connection):
     conn.execute('COMMIT')
 
 
+# Bump when the schema changes, and add the statements that take an existing
+# database from the previous version to the new one.
+#
+# This exists because `CREATE TABLE IF NOT EXISTS` builds a correct database
+# from scratch and then silently does nothing to one that already exists. So
+# adding a column to `entries` works locally against a fresh DB, does nothing
+# at all to the deployed one, and the app fails at runtime on the first query
+# that names it. deploy.sh has no migration step to notice the difference.
+#
+# Version 1 is the baseline: whatever SCHEMA above produces. Existing
+# databases report user_version 0 and are simply stamped, since they already
+# match. A future change means SCHEMA_VERSION = 2 plus MIGRATIONS[2] = (...),
+# with the SCHEMA text updated too so fresh databases skip the migration.
+SCHEMA_VERSION = 1
+MIGRATIONS: dict[int, tuple[str, ...]] = {}
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Bring an existing database up to SCHEMA_VERSION."""
+    version: int = conn.execute('PRAGMA user_version').fetchone()[0]
+    if version >= SCHEMA_VERSION:
+        return
+    # Only take the write lock when there is actually something to do —
+    # init_schema runs on every connection.
+    with transaction(conn):
+        for target in range(version + 1, SCHEMA_VERSION + 1):
+            for stmt in MIGRATIONS.get(target, ()):
+                conn.execute(stmt)
+        # PRAGMA doesn't take bound parameters; the value is our own int.
+        conn.execute(f'PRAGMA user_version = {int(SCHEMA_VERSION)}')
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    migrate(conn)
 
 
 @contextmanager

@@ -45,3 +45,29 @@ def test_external_entity_blocked():
         assert '/etc/hostname' not in ''.join(el.itertext())
     except etree.XMLSyntaxError:
         pass
+
+
+def test_schema_version_is_stamped():
+    """CREATE TABLE IF NOT EXISTS does nothing to an existing database, so a
+    future column addition needs a migration ladder to reach production."""
+    import sqlite3
+    from app import db
+    conn = sqlite3.connect(':memory:')
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
+    assert conn.execute('PRAGMA user_version').fetchone()[0] == 0
+    db.init_schema(conn)
+    assert conn.execute('PRAGMA user_version').fetchone()[0] == db.SCHEMA_VERSION
+    # Idempotent: re-running must not re-apply anything.
+    db.init_schema(conn)
+    assert conn.execute('PRAGMA user_version').fetchone()[0] == db.SCHEMA_VERSION
+    conn.close()
+
+
+def test_migrations_cover_every_version_step():
+    from app import db
+    for target in db.MIGRATIONS:
+        assert 1 < target <= db.SCHEMA_VERSION, (
+            f'MIGRATIONS[{target}] is unreachable at SCHEMA_VERSION='
+            f'{db.SCHEMA_VERSION}'
+        )
