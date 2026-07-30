@@ -323,4 +323,86 @@ export const cases: Case[] = [
     expected: '<foreign>[aa mid bb]</foreign>',
     notes: 'merge across non-adjacent same tags absorbs the text in the middle. Desired? Answer: Of course!',
   },
+
+  // ==========================================================================
+  // K. Attribute preservation.
+  //
+  // The container was re-emitted as a bare `<C>`, so rewriting an element
+  // dropped whatever it carried. 34,774 entries have <orth y="…">, and that
+  // coordinate feeds first_orth_y, /api/entry-at and the column-image sync.
+  // ==========================================================================
+  {
+    name: 'K1. extracting from an orth keeps its y on the remnant',
+    input: '<orth y="120.5">hello [world]</orth>',
+    apply: 'form',
+    expected: '<orth y="120.5">hello</orth> <form>[world]</form>',
+  },
+  {
+    name: 'K2. extracting mid-element keeps y on both remnants',
+    input: '<orth y="12">abc [def] ghi</orth>',
+    apply: 'form',
+    expected: '<orth y="12">abc</orth> <form>[def]</form> <orth y="12">ghi</orth>',
+  },
+  {
+    name: 'K3. merge keeps the existing element attributes',
+    input: '<ref target="#alpha">[alpha</ref> beta]',
+    apply: 'ref',
+    expected: '<ref target="#alpha">[alpha beta]</ref>',
+    notes: 'rebuilding from DEFAULT_ATTRS produced target="", destroying a valid '
+      + 'cross-reference and leaving an entry teiLint flags as an error.',
+  },
+  {
+    name: 'K4. gram type survives an extract',
+    input: '<gram type="etym">abc [def]</gram>',
+    apply: 'form',
+    expected: '<gram type="etym">abc</gram> <form>[def]</form>',
+  },
+
+  // ==========================================================================
+  // L. Preconditions — cases where the only correct answer is "do nothing".
+  //
+  // Each of these used to fall through to plainWrap, which inserts an open
+  // tag at `from` and a close tag at `to` with no regard for what is in
+  // between, producing XML the backend then rejects on save.
+  // ==========================================================================
+  {
+    name: 'L1. selection crossing a close tag is refused',
+    input: '<orth y="20.7"><b>[Abacus</b></orth>, ]<form>ci</form>',
+    apply: 'foreign',
+    expected: '<orth y="20.7"><b>[Abacus</b></orth>, ]<form>ci</form>',
+    notes: 'produced <b><foreign>Abacus</b></orth>, </foreign> — not well-formed.',
+  },
+  {
+    name: 'L2. selection crossing an open tag is refused',
+    input: '<foreign>a[b</foreign> c<form>d]e</form>',
+    apply: 'b',
+    expected: '<foreign>a[b</foreign> c<form>d]e</form>',
+  },
+  {
+    name: 'L3. empty cursor inside a content tag is a no-op',
+    input: '<foreign>hel[]lo</foreign>',
+    apply: 'form',
+    expected: '<foreign>hel[]lo</foreign>',
+    notes: 'used to cut the element in three and insert an empty <form></form>.',
+  },
+  {
+    name: 'L4. selection inside an attribute value is refused',
+    input: '<ref target="#a[bc]d">x</ref>',
+    apply: 'form',
+    expected: '<ref target="#a[bc]d">x</ref>',
+    notes: 'reachable by double-clicking a word while fixing a cross-reference.',
+  },
+  {
+    name: 'L5. selection inside a tag name is refused',
+    input: '<fo[rei]gn>x</foreign>',
+    apply: 'b',
+    expected: '<fo[rei]gn>x</foreign>',
+  },
+  {
+    name: 'L6. selecting a whole element is still allowed',
+    input: '<foreign>a [<b>x</b>] b</foreign>',
+    apply: 'form',
+    expected: '<foreign>a</foreign> <form>[<b>x</b>]</form> <foreign>b</foreign>',
+    notes: 'the endpoints touch markup but are not inside it, so this must work.',
+  },
 ];

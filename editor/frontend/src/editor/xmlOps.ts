@@ -3,7 +3,7 @@ import {
   EditorSelection, type ChangeSpec, type EditorState, type SelectionRange,
 } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
-import type { SyntaxNode } from '@lezer/common';
+import type { SyntaxNode, Tree } from '@lezer/common';
 
 // Explicit .ts extension: scripts/test-xmlops.ts runs this module through
 // `node --experimental-strip-types`, whose ESM resolver requires it.
@@ -113,13 +113,20 @@ function rightTrim(s: string, minPos: number): number {
 
 export type Enclosing = {
   name: string;
+  /** Verbatim attribute source from the open tag, including its leading
+   *  space — e.g. ` y="120.5"`. Empty when the element has no attributes.
+   *  Carried so that rewriting an element preserves them: 34,774 entries
+   *  have <orth y="…">, and that coordinate drives first_orth_y, /entry-at
+   *  and the column-image sync. */
+  attrs: string;
   outerFrom: number; outerTo: number;
   innerFrom: number; innerTo: number;
   node: SyntaxNode;
 };
 
-// Reads the tag name and inner/outer bounds off an `Element` syntax node.
-// Returns null for self-closing or otherwise malformed elements.
+// Reads the tag name, attribute source and inner/outer bounds off an
+// `Element` syntax node. Returns null for self-closing or otherwise
+// malformed elements.
 export function readElement(state: EditorState, node: SyntaxNode): Enclosing | null {
   if (node.name !== 'Element') return null;
   const openTag = node.firstChild;
@@ -128,10 +135,45 @@ export function readElement(state: EditorState, node: SyntaxNode): Enclosing | n
   if (!openTag || !closeTag || !tagNameNode || closeTag.name !== 'CloseTag') return null;
   return {
     name: state.doc.sliceString(tagNameNode.from, tagNameNode.to),
+    // Between the end of the tag name and the '>' that closes the open tag.
+    attrs: state.doc.sliceString(tagNameNode.to, openTag.to - 1),
     outerFrom: node.from, outerTo: node.to,
     innerFrom: openTag.to, innerTo: closeTag.from,
     node,
   };
+}
+
+// Node types that are markup rather than content. A selection endpoint may
+// sit at their edges (selecting a whole element is fine) but never strictly
+// inside one.
+const MARKUP_NODES: ReadonlySet<string> = new Set([
+  'OpenTag', 'CloseTag', 'SelfClosingTag', 'MismatchedCloseTag',
+  'StartTag', 'StartCloseTag', 'EndTag', 'TagName',
+  'Attribute', 'AttributeName', 'AttributeValue', 'Is',
+  'Comment', 'CData', 'ProcessingInst', 'DoctypeDecl',
+]);
+
+function inMarkup(tree: Tree, pos: number): boolean {
+  for (let n: SyntaxNode | null = tree.resolveInner(pos, 1); n; n = n.parent) {
+    if (MARKUP_NODES.has(n.name) && n.from < pos && pos < n.to) return true;
+  }
+  return false;
+}
+
+// The Element (or Document) that directly contains `pos`. `side` picks which
+// neighbour a boundary position belongs to: 1 looks right (used for the start
+// of a selection), -1 looks left (used for its end).
+function enclosingElement(tree: Tree, pos: number, side: -1 | 1): SyntaxNode | null {
+  for (let n: SyntaxNode | null = tree.resolveInner(pos, side); n; n = n.parent) {
+    if (n.name === 'Element' || n.name === 'Document') return n;
+  }
+  return null;
+}
+
+function sameEnclosingElement(tree: Tree, from: number, to: number): boolean {
+  const a = enclosingElement(tree, from, 1);
+  const b = enclosingElement(tree, to, -1);
+  return a !== null && b !== null && a.from === b.from && a.to === b.to;
 }
 
 // Walks innermost-first up the syntax tree from `from`, collecting every
@@ -203,6 +245,10 @@ function stripTagsByName(
       ranges.push({ from: el.innerTo,   to: el.outerTo   });
     },
   });
+  // iterate() visits parents before children, so nested same-name elements
+  // come back out of document order. The loop below assumes ascending
+  // ranges; unsorted, it sliced backwards and duplicated text.
+  ranges.sort((a, b) => a.from - b.from);
   let out = '';
   let pos = from;
   for (const r of ranges) {
@@ -332,7 +378,7 @@ function collectSegments(
 // split a side into multiple runs. Each run gets wrapped in <C>...</C> if
 // its body has letters; non-letter chars at the run's leading/trailing
 // edges are pushed outside the wrapper.
-function renderRun(run: Segment[], C: string): string {
+function renderRun(run: Segment[], C: string, cAttrs: string): string {
   if (run.length === 0) return '';
   let outerLeft = '';
   let outerRight = '';
@@ -356,22 +402,23 @@ function renderRun(run: Segment[], C: string): string {
     body += s.slice(l, r);
   }
   if (!hasLetters(body)) return outerLeft + body + outerRight;
-  return `${outerLeft}<${C}>${body}</${C}>${outerRight}`;
+  // Re-emit the container's own attributes, not a bare <C>.
+  return `${outerLeft}<${C}${cAttrs}>${body}</${C}>${outerRight}`;
 }
 
-function renderSide(segs: Segment[], C: string): string {
+function renderSide(segs: Segment[], C: string, cAttrs: string): string {
   let out = '';
   let run: Segment[] = [];
   for (const seg of segs) {
     if (seg.kind === 'opaque') {
-      out += renderRun(run, C);
+      out += renderRun(run, C, cAttrs);
       out += seg.text;
       run = [];
     } else {
       run.push(seg);
     }
   }
-  out += renderRun(run, C);
+  out += renderRun(run, C, cAttrs);
   return out;
 }
 
@@ -379,6 +426,18 @@ export function tagOp(
   state: EditorState, range: SelectionRange, X: string,
   resolveAttrs?: AttrResolver,
 ): Wrap | null {
+  // 0. Preconditions. Every rule below reads the syntax tree, and that tree
+  // is built incrementally: past the parsed frontier every lookup comes back
+  // empty and the op silently degrades to a plain wrap, producing output that
+  // violates the schema. Entries longer than the frontier (394 of them) hit
+  // this, and which result you got depended on how far you had scrolled.
+  const tree = syntaxTree(state);
+  if (tree.length < range.to) return null;
+  // Endpoints strictly inside markup — a tag name, an attribute value, a
+  // comment — would otherwise have a tag inserted into them, e.g.
+  // target="#a<form>bc</form>d" from double-clicking a word in a ref target.
+  if (inMarkup(tree, range.from) || inMarkup(tree, range.to)) return null;
+
   const attrs = resolveAttrs?.(state.doc.sliceString(range.from, range.to));
   // 1. If the selection is contained in a single same-tag X → unwrap.
   const xTouching = findElementsByNameNear(state, range.from, range.to, X);
@@ -393,7 +452,14 @@ export function tagOp(
     const { from, to } = expandMergeZone(state, range.from, range.to, X);
     const inner = stripTagsByName(state, from, to, X);
     if (!isMergeSafe(inner, X)) return null;
-    const open = formatOpenTag(X, attrs);
+    // Keep the attributes of the first X being merged rather than rebuilding
+    // from defaults, which turned <ref target="#alpha"> into <ref target="">
+    // — a valid cross-reference replaced by one teiLint flags as an error.
+    const existing = findElementsByNameNear(state, from, to, X)
+      .find((e) => e.attrs.trim() !== '');
+    const open = existing && !attrs
+      ? `<${X}${existing.attrs}>`
+      : formatOpenTag(X, attrs);
     const close = `</${X}>`;
     return {
       changes: { from, to, insert: open + inner + close },
@@ -401,16 +467,25 @@ export function tagOp(
     };
   }
 
+  // Rules 3-5 all put a new element *around* the selection, so from here on
+  // an empty cursor is meaningless. Rule 4 used to act on one anyway, cutting
+  // the enclosing element in three around a stray click and leaving an empty
+  // <X></X> in the gap.
+  if (range.empty) return null;
+  // ...and both endpoints must sit in the same element, or the open and close
+  // tags land on opposite sides of an existing boundary and the result isn't
+  // well-formed: a drag past </b></orth> produced <b><foreign>…</b></orth>…
+  // </foreign>, which the backend then rejects on save.
+  if (!sameEnclosingElement(tree, range.from, range.to)) return null;
+
   // 3. Inline-format target → plain wrap (inline format nests freely).
   if (INLINE_FORMAT_SET.has(X)) {
-    if (range.empty) return null;
     return plainWrap(range.from, range.to, X, attrs);
   }
 
   // 4. Content-tag target with an ancestor → extract.
   const ancestors = findContentAncestors(state, range.from, range.to);
   if (ancestors.length === 0) {
-    if (range.empty) return null;
     return plainWrap(range.from, range.to, X, attrs);
   }
 
@@ -422,8 +497,8 @@ export function tagOp(
   if (beforeSegs === null || afterSegs === null) return null;
 
   const middle = state.doc.sliceString(range.from, range.to);
-  const beforeRendered = renderSide(beforeSegs, C.name);
-  const afterRendered  = renderSide(afterSegs,  C.name);
+  const beforeRendered = renderSide(beforeSegs, C.name, C.attrs);
+  const afterRendered  = renderSide(afterSegs,  C.name, C.attrs);
   const wrappedOpen  = formatOpenTag(X, attrs);
   const wrappedClose = `</${X}>`;
   const replacement = beforeRendered + wrappedOpen + middle + wrappedClose + afterRendered;
@@ -454,15 +529,18 @@ export function applyTag(
   resolveAttrs?: AttrResolver,
 ): boolean {
   const { state } = view;
-  const ranges = state.selection.ranges;
-  const wraps = ranges.map((r) => tagOp(state, r, tag, resolveAttrs));
-  if (wraps.every((w) => w === null)) return false;
+  // Main range only. tagOp's rule 4 replaces the *whole* enclosing element,
+  // so two cursors inside one container each produced a full replacement of
+  // it and both got applied — 'alpha beta' came back as 'alpha beta alpha
+  // beta'. The per-range selections were also handed to EditorSelection
+  // unmapped, so they pointed into the pre-change document. The toolbar is a
+  // single-selection tool; tagging just the main range is both correct and
+  // what it always appeared to do.
+  const wrap = tagOp(state, state.selection.main, tag, resolveAttrs);
+  if (wrap === null) return false;
   view.dispatch({
-    changes: wraps.flatMap((w) => w ? [w.changes] : []),
-    selection: EditorSelection.create(
-      wraps.map((w, i) => w?.selection ?? ranges[i]),
-      state.selection.mainIndex,
-    ),
+    changes: wrap.changes,
+    selection: EditorSelection.create([wrap.selection]),
     scrollIntoView: true,
   });
   view.focus();
