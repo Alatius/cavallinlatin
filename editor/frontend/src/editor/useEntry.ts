@@ -118,9 +118,15 @@ export function useEntry(urlId: string): UseEntryResult {
     return () => clearInterval(iv);
   }, [ownsLock, urlId]);
 
-  // Release the lock on navigate-away when it's ours and the entry is clean,
-  // so other editors don't see a stale "X redigerar" for 15 min after we move
-  // on. Dirty entries keep the lock — the user still has an unsaved draft.
+  // Release the lock on navigate-away when it's ours, so other editors don't
+  // see a stale "X redigerar" for 15 min after we move on.
+  //
+  // This now fires for a dirty entry too. `dirty` is gated on `ready`, and on
+  // navigation the render for the new urlId sees the old `entry`, so dirty is
+  // already false by the time the cleanup runs. That's the right outcome: the
+  // buffer is replaced as soon as the new entry's fetch resolves, so the
+  // draft the retained lock was supposedly protecting no longer exists —
+  // keeping it just blocked other editors for 15 minutes.
   const ownsLockRef = useRef(false);
   const dirtyRef = useRef(false);
   ownsLockRef.current = ownsLock;

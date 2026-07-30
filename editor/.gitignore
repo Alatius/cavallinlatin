@@ -16,3 +16,6 @@ backend/*.egg-info/
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
+
+# Playwright MCP session artifacts (snapshots, console logs, screenshots)
+.playwright-mcp/

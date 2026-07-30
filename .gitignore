@@ -41,3 +41,4 @@ proofread/columns/*.png
 proofread/.alignment_cache.pkl
 .claude/
 .DS_Store
+.playwright-mcp/
