@@ -37,7 +37,23 @@ export function useEntry(urlId: string): UseEntryResult {
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
 
-  const dirty = xml !== baseXml || status !== baseStatus;
+  // Does the loaded buffer actually belong to the entry in the URL? On A→B
+  // navigation the component stays mounted and `entry` keeps holding A until
+  // B's fetch resolves — deliberately, so EntryShell (and the column image's
+  // scroll position) survive the transition. But nothing may *act* on the
+  // buffer while it belongs to a different entry than the URL addresses:
+  // that turned a failed fetch into "edit A, save it over B", and made
+  // navigating away from a dirty entry take out a lock on the destination.
+  const ready = entry !== null && entry.url_id === urlId;
+
+  // Deliberately false while stale, which gates the save button, the
+  // leave-page prompt and the acquire-lock-on-first-edit effect in one place.
+  const dirty = ready && (xml !== baseXml || status !== baseStatus);
+
+  // Read inside async callbacks to detect navigation that happened while a
+  // request was in flight.
+  const urlIdRef = useRef(urlId);
+  useEffect(() => { urlIdRef.current = urlId; }, [urlId]);
 
   const apply = useCallback((e: Entry) => {
     setEntry(e);
@@ -58,7 +74,15 @@ export function useEntry(urlId: string): UseEntryResult {
     api.get<Entry>(`/entries/${urlId}`)
       .then((e) => { if (active) apply(e); })
       .catch((err) => {
-        if (active) setError(err instanceof ApiError ? err.message : String(err));
+        if (!active) return;
+        // Drop the previous entry. Holding on to it would leave the editor
+        // rendering A's XML, breadcrumb, history link and column image under
+        // B's URL, with only a one-line error to say otherwise. Only `entry`
+        // is cleared: it alone decides what renders, and touching `xml` here
+        // would trip the clear-error-on-edit effect below and wipe the error
+        // we're setting.
+        setEntry(null);
+        setError(err instanceof ApiError ? err.message : String(err));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -111,27 +135,42 @@ export function useEntry(urlId: string): UseEntryResult {
   }, [urlId]);
 
   const performSave = useCallback(async (nextStatus: Status) => {
+    // Never PUT a buffer that belongs to a different entry than the URL
+    // addresses. The expected_updated_at failsafe cannot catch that case:
+    // import stamped every entry with the same updated_at, so the check
+    // passes between any two never-yet-edited entries.
+    if (!ready) return;
+    const sentUrlId = urlId;
+    const sent = xml;
     setSaving(true);
     setError(null);
     try {
-      const e = await api.put<Entry>(`/entries/${urlId}`, {
-        xml_body: xml,
+      const e = await api.put<Entry>(`/entries/${sentUrlId}`, {
+        xml_body: sent,
         status: nextStatus,
         // Optimistic concurrency: server 409s if the row's updated_at has
         // moved on, so a stale draft can't silently overwrite a newer save.
         expected_updated_at: entry?.updated_at ?? null,
       });
+      // Navigated away mid-save: the response describes the entry we left,
+      // so applying it here would drop it into the new entry's editor.
+      if (urlIdRef.current !== sentUrlId) return;
       setEntry(e);
-      setXml(e.xml_body);
       setStatus(e.status);
       setBaseXml(e.xml_body);
       setBaseStatus(e.status);
+      // Keep anything typed while the request was in flight. CodeMirror is
+      // controlled, so overwriting `xml` unconditionally reverted those
+      // keystrokes the moment the user paused — and because baseXml was set
+      // to the same string, the indicator claimed "Sparat" while doing it.
+      setXml((cur) => (cur === sent ? e.xml_body : cur));
     } catch (err) {
+      if (urlIdRef.current !== sentUrlId) return;
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setSaving(false);
     }
-  }, [urlId, xml, entry?.updated_at]);
+  }, [ready, urlId, xml, entry?.updated_at]);
 
   const save = useCallback(() => performSave(status), [performSave, status]);
 
@@ -163,10 +202,13 @@ export function useEntry(urlId: string): UseEntryResult {
   const addComment = useCallback(async (body: string) => {
     const trimmed = body.trim();
     if (!trimmed) return;
+    const sentUrlId = urlId;
     setCommentError(null);
     try {
-      const c = await api.post<Comment>(`/entries/${urlId}/comments`, { body: trimmed });
+      const c = await api.post<Comment>(`/entries/${sentUrlId}/comments`, { body: trimmed });
       // Comments are listed oldest → newest; the new one goes at the end.
+      // Skip if we've navigated: the list on screen is another entry's now.
+      if (urlIdRef.current !== sentUrlId) return;
       setComments((prev) => [...prev, c]);
     } catch (err) {
       setCommentError(err instanceof ApiError ? err.message : String(err));
@@ -175,16 +217,28 @@ export function useEntry(urlId: string): UseEntryResult {
   }, [urlId]);
 
   const acquireLock = useCallback(async () => {
+    if (!ready) return;
+    const sentUrlId = urlId;
     try {
-      const lock = await api.post<LockInfo>(`/entries/${urlId}/lock`);
+      const lock = await api.post<LockInfo>(`/entries/${sentUrlId}/lock`);
       // Optimistic local update — don't reload() because that would clobber
       // the user's uncommitted XML edits.
+      if (urlIdRef.current !== sentUrlId) return;
       setEntry((prev) => prev ? { ...prev, lock } : prev);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) await reload();
+      // 409 means someone else holds it, and the response says who. Adopt
+      // that directly: reload() would refetch the body and wipe the very
+      // edits this lock was being taken out to protect.
+      if (err instanceof ApiError && err.status === 409
+          && urlIdRef.current === sentUrlId) {
+        const held = (err.detail as { detail?: LockInfo } | undefined)?.detail;
+        if (held && typeof held.user_id === 'number') {
+          setEntry((prev) => prev ? { ...prev, lock: held } : prev);
+        }
+      }
       throw err;
     }
-  }, [urlId, reload]);
+  }, [ready, urlId]);
 
   return {
     entry, error, loading, dirty, saving, xml, status,

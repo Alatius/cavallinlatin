@@ -95,9 +95,12 @@ export default function EntryEditor() {
   const commentCount = ent.comments.length;
   const loadingComments = ent.loadingComments;
   useEffect(() => {
-    if (!entryUrlId || loadingComments) return;
+    // The entry and its comments are fetched by two independent effects, so
+    // mid-navigation `entry` can still be A while `comments` already holds
+    // B's (empty) list. Patching then wipes A's 💬 marker from the index.
+    if (!entryUrlId || entryUrlId !== urlId || loadingComments) return;
     patchHeadword(entryUrlId, { comment_count: commentCount });
-  }, [entryUrlId, commentCount, loadingComments, patchHeadword]);
+  }, [entryUrlId, urlId, commentCount, loadingComments, patchHeadword]);
 
   // Read the EditorView via the @uiw/react-codemirror imperative handle.
   // It goes back to undefined when CodeMirror unmounts, so we never end up
@@ -236,6 +239,11 @@ export default function EntryEditor() {
   // ColumnImagePanel retains its scroll position when we navigate to an
   // entry whose column differs from the one the user is currently viewing.
   if (!ent.entry) {
+    // A failed load clears the entry, so say so plainly rather than sitting
+    // on "Laddar …" forever.
+    if (ent.error) {
+      return <div className="error">Kunde inte ladda {urlId}: {ent.error}</div>;
+    }
     return <div className="loading">Laddar {urlId} …</div>;
   }
 
