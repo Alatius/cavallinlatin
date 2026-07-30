@@ -75,3 +75,53 @@ def test_login_success_clears_failure_counter(client, reset_login_attempts):
     assert r.status_code == 200
     # IP bucket should be empty after success.
     assert all(not v for v in auth_router._LOGIN_ATTEMPTS.values())
+
+
+def test_login_success_does_not_forgive_another_accounts_failures(client, reset_login_attempts):
+    """An attacker with valid credentials of their own must not be able to
+    reset the counter guarding the account they're guessing at.
+
+    Keying the limiter on IP alone let them do exactly that: nine guesses at
+    the admin, one successful login as themselves, repeat forever.
+    """
+    from app.routers import auth as auth_router
+
+    def guess() -> int:
+        return client.post('/api/auth/login', json={
+            'email': 'victim@example.com', 'password': 'guess',
+        }).status_code
+
+    # Stay one under the limit, then clear the IP bucket by authenticating
+    # successfully as a *different* account — the attacker's own.
+    for _ in range(auth_router._LOGIN_MAX_FAILURES - 1):
+        assert guess() == 401
+    assert client.post('/api/auth/login', json={
+        'email': 'test@example.com', 'password': 'correctpass1234',
+    }).status_code == 200
+    assert 'ip:testclient' not in auth_router._LOGIN_ATTEMPTS
+
+    # The victim's own bucket survived that reset, so the attack stalls: one
+    # more guess tips it to the limit and everything after is refused.
+    assert guess() == 401
+    assert guess() == 429
+
+
+def test_login_rate_limit_counts_concurrent_attempts(client, reset_login_attempts):
+    """Attempts are recorded before the Argon2 verify, not after, so a burst
+    arriving inside one verify window can't all slip past the check."""
+    from app.routers import auth as auth_router
+    for _ in range(auth_router._LOGIN_MAX_FAILURES):
+        client.post('/api/auth/login', json={
+            'email': 'test@example.com', 'password': 'wrong',
+        })
+    bucket = auth_router._LOGIN_ATTEMPTS.get('user:test@example.com', [])
+    assert len(bucket) == auth_router._LOGIN_MAX_FAILURES
+
+
+def test_login_password_length_is_capped(client, reset_login_attempts):
+    """An unbounded password would be handed to Argon2 (64 MiB, ~150 ms) on an
+    unauthenticated endpoint."""
+    r = client.post('/api/auth/login', json={
+        'email': 'test@example.com', 'password': 'x' * 5000,
+    })
+    assert r.status_code == 422

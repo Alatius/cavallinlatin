@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
@@ -15,11 +16,21 @@ router = APIRouter()
 
 
 # In-memory failed-login tracker. Single-worker deployment, so no shared
-# state needed. The list per IP is pruned to the rolling window on every
-# check, so memory stays bounded by the number of currently-attacking IPs.
+# state needed; a lock because the endpoint is sync and therefore runs on
+# Starlette's threadpool.
+#
+# Buckets are keyed 'ip:<addr>' AND 'user:<email>', and both must be under the
+# limit. The per-account bucket is what stops an attacker who can produce
+# successful logins of their own — an invited editor guessing the admin's
+# password, say. Keying on IP alone let them reset the counter every tenth
+# guess by logging into their own account, since success forgives the whole IP.
 _LOGIN_ATTEMPTS: dict[str, list[int]] = {}
+_LOGIN_LOCK = threading.Lock()
 _LOGIN_WINDOW = 5 * 60  # seconds
 _LOGIN_MAX_FAILURES = 10
+# Above this many tracked buckets, sweep the whole dict instead of only the
+# keys being looked at, so IPs that attacked once and left are reclaimed.
+_LOGIN_SWEEP_AT = 1024
 
 # Hash compared against when the email doesn't exist. Argon2 verify against
 # this takes the same ~150 ms as a real verify, so an attacker can't tell
@@ -31,25 +42,57 @@ def _client_ip(request: Request) -> str:
     return (request.client.host if request.client else None) or 'unknown'
 
 
-def _check_login_rate(ip: str) -> None:
-    cutoff = security.now() - _LOGIN_WINDOW
-    attempts = [t for t in _LOGIN_ATTEMPTS.get(ip, []) if t > cutoff]
-    _LOGIN_ATTEMPTS[ip] = attempts
-    if len(attempts) >= _LOGIN_MAX_FAILURES:
+def _prune(key: str, cutoff: int) -> list[int]:
+    """Drop out-of-window failures for `key`, forgetting the key if empty."""
+    attempts = [t for t in _LOGIN_ATTEMPTS.get(key, []) if t > cutoff]
+    if attempts:
+        _LOGIN_ATTEMPTS[key] = attempts
+    else:
+        _LOGIN_ATTEMPTS.pop(key, None)
+    return attempts
+
+
+def _check_and_record(keys: tuple[str, ...]) -> None:
+    """429 if any bucket is over the limit; otherwise record an attempt.
+
+    Recording happens here rather than after the password check because the
+    Argon2 verify takes ~150 ms, and a burst arriving inside that window would
+    otherwise all pass the check before any of them recorded a failure. The
+    attempt is forgiven again by _forget() when the login succeeds.
+    """
+    now = security.now()
+    cutoff = now - _LOGIN_WINDOW
+    with _LOGIN_LOCK:
+        if len(_LOGIN_ATTEMPTS) > _LOGIN_SWEEP_AT:
+            for stale in [k for k in _LOGIN_ATTEMPTS if k not in keys]:
+                _prune(stale, cutoff)
+        over = any(len(_prune(key, cutoff)) >= _LOGIN_MAX_FAILURES for key in keys)
+        if not over:
+            for key in keys:
+                _LOGIN_ATTEMPTS.setdefault(key, []).append(now)
+    if over:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             'För många misslyckade försök; försök igen om några minuter',
         )
 
 
-def _record_login_failure(ip: str) -> None:
-    _LOGIN_ATTEMPTS.setdefault(ip, []).append(security.now())
+def _forget(keys: tuple[str, ...]) -> None:
+    """Clear the buckets for a successful login.
+
+    Only the buckets belonging to *this* login: another account's bucket must
+    survive, or authenticating as yourself would reset the counter guarding
+    the account you are guessing at.
+    """
+    with _LOGIN_LOCK:
+        for key in keys:
+            _LOGIN_ATTEMPTS.pop(key, None)
 
 
 @router.post('/login', response_model=UserOut)
 def login(data: LoginIn, response: Response, conn: Conn, request: Request):
-    ip = _client_ip(request)
-    _check_login_rate(ip)
+    keys = (f'ip:{_client_ip(request)}', f'user:{data.email.lower()}')
+    _check_and_record(keys)
 
     row = conn.execute(
         'SELECT id, email, display_name, password_hash, is_admin '
@@ -61,12 +104,13 @@ def login(data: LoginIn, response: Response, conn: Conn, request: Request):
     pw_hash = row['password_hash'] if row else _DUMMY_HASH
     pw_ok = security.verify_password(pw_hash, data.password)
     if not row or not pw_ok:
-        _record_login_failure(ip)
+        # The attempt was already recorded by _check_and_record.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, 'Felaktig e-post eller lösenord')
 
-    # Successful login: forgive prior failures so a user who fumbled their
-    # password before getting it right doesn't get locked out next time.
-    _LOGIN_ATTEMPTS.pop(ip, None)
+    # Successful login: forgive this IP's and this account's prior failures so
+    # a user who fumbled their password before getting it right isn't locked
+    # out next time. Other accounts' buckets are deliberately left alone.
+    _forget(keys)
 
     now = security.now()
     token = security.new_session_token()

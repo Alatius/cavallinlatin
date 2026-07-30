@@ -29,6 +29,32 @@ def test_search_returns_marker_wrapped_snippets(client):
     assert '</mark>' not in snippet
 
 
+def test_search_survives_fts5_metacharacters_and_control_chars(client):
+    """/api/search is unauthenticated, so no input may reach FTS5 in a form it
+    rejects. A NUL used to escape _sanitize and surface as a 500, because
+    FTS5's query parser is C-string based and saw an unterminated phrase.
+    """
+    hostile = [
+        '\x00', 'a\x00b', '\x01\x02', 'a\x7fb',      # control characters
+        '"', 'a"b', "'", '\\',                        # quoting
+        '*', '^a', 'a*', '-a', '(((', '{1}',          # FTS5 syntax
+        'a OR b', 'a AND', 'NEAR(', 'NEAR(a b, 2)',   # operators
+        'headword:x', 'a:b:c',                        # column filters
+        '', '   ', '#$%&/()=?', 'ss' * 40,
+    ]
+    for q in hostile:
+        r = client.get('/api/search', params={'q': q})
+        assert r.status_code == 200, f'q={q!r} -> {r.status_code} {r.text[:120]}'
+        assert r.json()['total'] >= 0
+
+
+def test_search_control_chars_keep_word_boundaries(client):
+    """Controls fold to a space rather than vanishing, so 'word\\x001' must not
+    be silently glued into the real term 'word1'."""
+    r = client.get('/api/search', params={'q': 'word\x001'})
+    assert r.status_code == 200
+
+
 def test_headwords_endpoint(client):
     r = client.get('/api/headwords')
     assert r.status_code == 200

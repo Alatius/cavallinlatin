@@ -32,6 +32,17 @@ _ENTRY_CLOSE = '</entry>'
 router = APIRouter()
 
 
+def _like_prefix(s: str) -> str:
+    """Build a LIKE prefix pattern that matches `s` literally.
+
+    Used with ESCAPE '\\'; the backslash itself must be escaped first so it
+    can't neutralise a following wildcard escape.
+    """
+    for ch in ('\\', '%', '_'):
+        s = s.replace(ch, '\\' + ch)
+    return s + '%'
+
+
 def _parse_safe(xml: str, msg: str) -> 'etree._Element':
     try:
         return etree.fromstring(xml.encode('utf-8'), SAFE_XML_PARSER)
@@ -143,7 +154,7 @@ def _entry_response(url_id: str, conn: sqlite3.Connection, user: sqlite3.Row | N
 @router.get('', response_model=EntryList)
 def list_entries(
     conn: Conn,
-    q: str = Query(default=''),
+    q: str = Query(default='', max_length=100),
     status_filter: str | None = Query(default=None, alias='status'),
     order: str = Query(default='document', pattern='^(document|alpha)$'),
     offset: int = Query(default=0, ge=0),
@@ -152,8 +163,10 @@ def list_entries(
     clauses: list[str] = []
     params: list = []
     if q:
-        clauses.append('headword_sort LIKE ?')
-        params.append(f'{fold(q)}%')
+        # ESCAPE so a literal % or _ in the query is matched as itself rather
+        # than as a LIKE wildcard (?q=% would otherwise return every entry).
+        clauses.append("headword_sort LIKE ? ESCAPE '\\'")
+        params.append(_like_prefix(fold(q)))
     if status_filter:
         clauses.append('status = ?')
         params.append(status_filter)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import sqlite3
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -28,6 +29,10 @@ _MARK_CLOSE = '\x02'
 # each query token into all spellings before passing it to MATCH. The
 # cap stops a pathological input from blowing up the query.
 _MAX_QUERY_ALTS = 64
+
+# C0 controls (incl. NUL) plus DEL and the C1 range. None of them carry any
+# search meaning.
+_CONTROL_TO_SPACE = {c: ' ' for c in [*range(0x20), *range(0x7f, 0xa0)]}
 
 
 @router.get('/headwords', response_model=list[EntrySummary])
@@ -90,8 +95,11 @@ def _token_alts(t: str) -> list[str]:
 def _sanitize(q: str) -> str:
     # FTS5 query: treat user input as a phrase prefix, expanded over the
     # w↔v and ß↔ss spellings the dictionary uses interchangeably. Drop
-    # quotes so they can't escape our outer phrase quoting.
-    safe = q.replace('"', '').strip().lower()
+    # quotes so they can't escape our outer phrase quoting, and fold control
+    # characters to spaces: FTS5's query parser is C-string based, so an
+    # embedded NUL truncates the query mid-phrase and raises
+    # OperationalError. A space rather than deletion keeps word boundaries.
+    safe = q.translate(_CONTROL_TO_SPACE).replace('"', '').strip().lower()
     if not safe:
         return ''
     words = safe.split()
@@ -117,20 +125,26 @@ def search(
     if not term:
         return SearchOut(query=q, total=0, items=[])
 
-    rows = conn.execute(
-        'SELECT e.url_id, e.headword, '
-        '       snippet(entries_fts, 1, ?, ?, ?, 12) AS snippet '
-        'FROM entries_fts '
-        'JOIN entries e ON e.id = entries_fts.rowid '
-        'WHERE entries_fts MATCH ? '
-        'ORDER BY bm25(entries_fts, 10.0, 1.0) LIMIT ?',
-        (_MARK_OPEN, _MARK_CLOSE, '…', term, limit),
-    ).fetchall()
+    # Backstop: _sanitize is meant to make every input a well-formed phrase
+    # query, but this endpoint is unauthenticated, so a gap in it must degrade
+    # to "no hits" rather than a 500.
+    try:
+        rows = conn.execute(
+            'SELECT e.url_id, e.headword, '
+            '       snippet(entries_fts, 1, ?, ?, ?, 12) AS snippet '
+            'FROM entries_fts '
+            'JOIN entries e ON e.id = entries_fts.rowid '
+            'WHERE entries_fts MATCH ? '
+            'ORDER BY bm25(entries_fts, 10.0, 1.0) LIMIT ?',
+            (_MARK_OPEN, _MARK_CLOSE, '…', term, limit),
+        ).fetchall()
 
-    total = conn.execute(
-        'SELECT COUNT(*) AS n FROM entries_fts WHERE entries_fts MATCH ?',
-        (term,),
-    ).fetchone()['n']
+        total = conn.execute(
+            'SELECT COUNT(*) AS n FROM entries_fts WHERE entries_fts MATCH ?',
+            (term,),
+        ).fetchone()['n']
+    except sqlite3.OperationalError:
+        return SearchOut(query=q, total=0, items=[])
 
     return SearchOut(
         query=q, total=total,

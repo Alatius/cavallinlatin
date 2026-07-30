@@ -116,6 +116,23 @@ def test_body_size_limit(auth_client):
     assert r.status_code == 413
 
 
+def test_list_query_treats_wildcards_literally(client):
+    """`q` feeds a LIKE pattern, so an unescaped % or _ would match everything
+    rather than searching for the character itself."""
+    everything = client.get('/api/entries').json()['total']
+    assert everything >= 2
+
+    for wildcard in ('%', '_', '%%', 'w%'):
+        r = client.get('/api/entries', params={'q': wildcard})
+        assert r.status_code == 200
+        assert r.json()['total'] == 0, f'{wildcard!r} behaved as a wildcard'
+
+    # A real prefix still matches. testentry2 keeps its seeded headword for
+    # the whole session; testentry1 gets rewritten by the save tests above.
+    hits = client.get('/api/entries', params={'q': 'word1'}).json()
+    assert [i['url_id'] for i in hits['items']] == ['testentry2']
+
+
 def test_save_with_matching_expected_updated_at_succeeds(auth_client):
     r = auth_client.get('/api/entries/testentry1')
     expected = r.json()['updated_at']

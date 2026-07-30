@@ -33,7 +33,9 @@ class UserAdminOut(UserOut):
 
 class LoginIn(BaseModel):
     email: EmailStr
-    password: str
+    # Capped so an oversized password can't be fed to Argon2, which costs
+    # 64 MiB and ~150 ms per verify on an unauthenticated endpoint.
+    password: str = Field(max_length=1024)
 
 
 class LockInfo(BaseModel):
@@ -227,8 +229,8 @@ class InviteAdminOut(BaseModel):
 
 
 class InviteAcceptIn(BaseModel):
-    password: str = Field(min_length=8)
-    display_name: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=1024)
+    display_name: str = Field(min_length=1, max_length=100)
 
 
 class SearchHit(BaseModel):
