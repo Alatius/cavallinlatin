@@ -1,3 +1,29 @@
+/* Palette for rendered entries. The per-tag pairs (pale tinted background +
+   matching darker text) are the editor's colour-coding; the public view
+   resets them and keeps only the -public tokens. --muted comes from the
+   app-wide palette in app.css. */
+:root {
+  --tag-orth-bg: #eedcf3;  --tag-orth: #5a2079;
+  --tag-foreign-bg: #dcebf7;  --tag-foreign: #1f4972;
+  --tag-form-bg: #ddecd8;  --tag-form: #2c5f2c;
+  --tag-pos-bg: #f6dddd;  --tag-pos: #7a2020;
+  --tag-gen-bg: #f6dfc4;  --tag-gen: #7a4a14;
+  --tag-subc-bg: #ede4b4;  --tag-subc: #6e5b10;
+  --tag-case-bg: #d7e9ce;  --tag-case: #3a6a20;
+  --tag-mood-bg: #d2e8e0;  --tag-mood: #1f6458;
+  --tag-tns-bg: #dae2f5;  --tag-tns: #2a4088;
+  --tag-number-bg: #e5dbf4;  --tag-number: #4a2088;
+  --tag-lbl-bg: #f4dce5;  --tag-lbl: #7a2255;
+  --tag-itype-bg: #f5dcc7;  --tag-itype: #7a3c18;
+  --tag-gram-bg: #d3e8ec;  --tag-gram: #1d5662;
+  --tag-hom-bg: #ece2b0;  --tag-hom: #6a5718;
+  --tag-orth-bg-hover: #f7ecfb;
+  --tag-reference-bg: #efefef;
+  --orth-public: #702895;    /* headwords; --orth-marker in app.css is its 20% alpha */
+  --foreign-public: #2a558e;
+  --reading-ink: #1a1a1a;
+}
+
 /* Styles for HTML rendered from an <entry> XML fragment (see render.ts).
    The base `.entry-render` rules are shared by the editor preview and the
    public view. `.entry-render--public` strips the color-coded tag palette
@@ -19,22 +45,22 @@
    identifiable at a glance without the shouty saturation of the
    original palette. */
 
-.entry-render orth      { background: #eedcf3; color: #5a2079; cursor: pointer; }
-.entry-render orth:hover{ background: #f7ecfb; }
-.entry-render .foreign  { background: #dcebf7; color: #1f4972; }
-.entry-render .form     { background: #ddecd8; color: #2c5f2c; }
-.entry-render .pos      { background: #f6dddd; color: #7a2020; font-style: italic; }
-.entry-render .gen      { background: #f6dfc4; color: #7a4a14; font-style: italic; }
-.entry-render .subc     { background: #ede4b4; color: #6e5b10; font-style: italic; }
-.entry-render .case     { background: #d7e9ce; color: #3a6a20; font-style: italic; }
-.entry-render .mood     { background: #d2e8e0; color: #1f6458; font-style: italic; }
-.entry-render .tns      { background: #dae2f5; color: #2a4088; font-style: italic; }
-.entry-render .number   { background: #e5dbf4; color: #4a2088; font-style: italic; }
-.entry-render .lbl      { background: #f4dce5; color: #7a2255; font-style: italic; }
-.entry-render .iType    { background: #f5dcc7; color: #7a3c18; }
-.entry-render .gram     { background: #d3e8ec; color: #1d5662; }
-.entry-render .hom      { background: #ece2b0; color: #6a5718; font-weight: bold; }
-.entry-render .entry[type="reference"] { background: #efefef; }
+.entry-render orth      { background: var(--tag-orth-bg); color: var(--tag-orth); cursor: pointer; }
+.entry-render orth:hover{ background: var(--tag-orth-bg-hover); }
+.entry-render .foreign  { background: var(--tag-foreign-bg); color: var(--tag-foreign); }
+.entry-render .form     { background: var(--tag-form-bg); color: var(--tag-form); }
+.entry-render .pos      { background: var(--tag-pos-bg); color: var(--tag-pos); font-style: italic; }
+.entry-render .gen      { background: var(--tag-gen-bg); color: var(--tag-gen); font-style: italic; }
+.entry-render .subc     { background: var(--tag-subc-bg); color: var(--tag-subc); font-style: italic; }
+.entry-render .case     { background: var(--tag-case-bg); color: var(--tag-case); font-style: italic; }
+.entry-render .mood     { background: var(--tag-mood-bg); color: var(--tag-mood); font-style: italic; }
+.entry-render .tns      { background: var(--tag-tns-bg); color: var(--tag-tns); font-style: italic; }
+.entry-render .number   { background: var(--tag-number-bg); color: var(--tag-number); font-style: italic; }
+.entry-render .lbl      { background: var(--tag-lbl-bg); color: var(--tag-lbl); font-style: italic; }
+.entry-render .iType    { background: var(--tag-itype-bg); color: var(--tag-itype); }
+.entry-render .gram     { background: var(--tag-gram-bg); color: var(--tag-gram); }
+.entry-render .hom      { background: var(--tag-hom-bg); color: var(--tag-hom); font-weight: bold; }
+.entry-render .entry[type="reference"] { background: var(--tag-reference-bg); }
 .entry-render a.ref {
   color: inherit;
   text-decoration: none;
@@ -50,14 +76,14 @@
   text-indent: -1.2em;
 }
 .entry-render .sense[data-y] { cursor: pointer; }
-.entry-render .sense-num { color: #5a2079; }
+.entry-render .sense-num { color: var(--tag-orth); }
 
 /* ---------- Public view: clean reading typography ---------- */
 
 .entry-render--public {
   font-size: 1.15rem;
   line-height: 1.5;
-  color: #1a1a1a;
+  color: var(--reading-ink);
   font-feature-settings: "kern", "liga";
   max-width: 42rem;
 }
@@ -85,10 +111,10 @@
 }
 
 /* The distinctions that are worth preserving typographically. */
-.entry-render--public orth { color: #702895; }
+.entry-render--public orth { color: var(--orth-public); }
 .entry-render--public orth b { font-size: 125%; }
-.entry-render--public .form { color: #702895; }
-.entry-render--public .foreign { color: #2a558e; }
+.entry-render--public .form { color: var(--orth-public); }
+.entry-render--public .foreign { color: var(--foreign-public); }
 .entry-render--public .pos,
 .entry-render--public .gen,
 .entry-render--public .subc,
@@ -110,4 +136,4 @@
 }
 
 /* Cross-references: slightly muted, otherwise plain. */
-.entry-render--public .entry[type="reference"] { color: #555; }
+.entry-render--public .entry[type="reference"] { color: var(--muted); }

@@ -1,4 +1,102 @@
-:root { color-scheme: light; }
+:root {
+  color-scheme: light;
+
+  /* ===== Palette — the single place colours are defined. =====
+     Every rule below references these; `git grep -n '#' -- '*.css'` outside
+     the two :root blocks should stay empty. Values are grouped by family;
+     tokens are value-keyed (one token per distinct colour), so renaming or
+     retuning a family is a one-line change. */
+
+  /* Ink (neutral text) */
+  --ink: #222;          /* body text and controls */
+  --ink-soft: #333;     /* chips, secondary controls */
+  --ink-strong: #000;   /* hover emphasis */
+  --muted: #555;        /* secondary text */
+  --muted-2: #666;      /* hints, labels */
+  --faint: #888;        /* empty states */
+  --disabled: #aaa;
+  --disabled-2: #bbb;
+
+  /* Slate (blue-grey chrome text: tabs, metadata, table heads) */
+  --slate: #557;
+  --slate-strong: #224;
+  --slate-faint: #889;
+  --slate-accent: #559;      /* active-tab underline, active toggle border */
+  --slate-accent-soft: #88a;
+
+  /* Surfaces */
+  --surface: #fff;
+  --surface-raised: #fafafa;   /* panels, disabled buttons */
+  --surface-tint: #fafafd;     /* control hover, timeline bg */
+  --surface-chrome: #f8f8fa;   /* toolbars */
+  --surface-header: #f2f2f5;   /* app header */
+  --surface-head: #f0f0f3;     /* table heads, neutral badge */
+  --surface-pressed: #eef0f5;  /* button active */
+  --surface-bar: #f7f7f7;      /* editor bottom bar */
+  --surface-code: #f3f3f3;     /* inline code */
+  --surface-panel: #f9f9f9;    /* column-image panel */
+  --surface-comments: #fafaff;
+
+  /* Borders */
+  --border-field: #c6c6cc;  /* buttons, inputs */
+  --border: #ddd;           /* panel hairlines */
+  --border-strong: #ccc;    /* chips, modal, resize handle */
+  --border-soft: #eee;      /* list hairlines */
+  --border-panel: #e5e5e5;  /* index-panel hairlines */
+  --border-heavy: #b8b8c0;  /* group divider */
+  --border-badge: #d8d8de;
+  --border-timeline: #d4d8e0;
+  --border-comments: #ccd;
+  --border-comments-tint: #ddf;
+  --border-comments-soft: #e5e5f0;
+
+  /* Accent blue (links, focus, primary action) */
+  --link: #1a4fb5;
+  --accent: #4a6da8;         /* focus border, chevron, saving dot */
+  --accent-strong: #1e3a8a;  /* primary border, active toggle text */
+  --accent-border: #99a2c0;
+  --primary: #2c5da1;        /* primary button */
+  --primary-hover: #224a85;
+  --primary-active: #1c3f73;
+  --accent-tint: #e7ecf7;    /* active toggle bg */
+  --accent-tint-2: #eef2fb;  /* dropdown hover */
+  --accent-tint-3: #f4f6fb;  /* dropdown current */
+  --tint-blue: #eef;         /* generic hover tint + comment hairline */
+  --tint-blue-press: #dde;
+  --selection: #cce5ff;      /* current index item */
+  --selection-soft: #e6f3ff; /* compared revisions */
+
+  /* Status: in progress (amber) */
+  --progress: #c80;
+  --progress-text: #a65a00;
+  --progress-dot: #e08a00;
+  --progress-bg: #fff4e0;
+  --progress-border: #f0c98a;
+  --lock-bg: #fff3e0;
+  --lock-text: #a60;
+
+  /* Status: approved (green) */
+  --approved: #2a2;
+  --approved-text: #1e7a1e;
+  --approved-bg: #e6f5e6;
+  --approved-border: #a8d8a8;
+
+  /* Errors and notices */
+  --error: #c22;
+  --error-bg: #fee;
+  --error-bg-strong: #fdeaea;
+  --error-border: #e7a3a3;
+  --error-text: #8a1f1f;
+  --notice-bg: #fff8e0;
+  --notice-border: #c8a000;
+  --mark-bg: #ffd;
+
+  /* Alpha layers */
+  --orth-marker: rgba(112, 40, 149, 0.2); /* 20% of --orth-public (entry.css) */
+  --shadow-menu: 0 6px 20px rgba(0, 0, 0, 0.18);
+  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.25);
+  --backdrop: rgba(0, 0, 0, 0.35);
+}
 
 /* Self-hosted fonts. Both Gentium (SIL) and the unsubsetted Noto Sans
    ship the OpenType GPOS rules needed to position stacked combining
@@ -68,11 +166,11 @@ html, body, #root { height: 100%; margin: 0; }
 
 body {
   font: 14px/1.4 "Noto Sans", system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: #fff;
-  color: #222;
+  background: var(--surface);
+  color: var(--ink);
 }
 
-a { color: #1a4fb5; text-decoration: none; }
+a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* Base button: flat field-style surface shared by all <button> elements
@@ -83,19 +181,19 @@ a:hover { text-decoration: underline; }
 button {
   font: inherit;
   cursor: pointer;
-  background: #fff;
-  color: #222;
-  border: 1px solid #c6c6cc;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-field);
   border-radius: 4px;
   padding: 0.3em 0.9em;
   transition: background 80ms ease;
 }
-button:hover:not(:disabled) { background: #fafafd; }
-button:active:not(:disabled) { background: #eef0f5; }
+button:hover:not(:disabled) { background: var(--surface-tint); }
+button:active:not(:disabled) { background: var(--surface-pressed); }
 button:disabled {
-  color: #aaa;
+  color: var(--disabled);
   cursor: default;
-  background: #fafafa;
+  background: var(--surface-raised);
 }
 
 /* Base text input / textarea: same field-style surface as the buttons.
@@ -104,9 +202,9 @@ button:disabled {
 input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="number"], [type="url"], [type="tel"], :not([type])),
 textarea {
   font: inherit;
-  background: #fff;
-  color: #222;
-  border: 1px solid #c6c6cc;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-field);
   border-radius: 4px;
   padding: 0.3em 0.5em;
   box-sizing: border-box;
@@ -114,11 +212,11 @@ textarea {
 input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="number"], [type="url"], [type="tel"], :not([type])):focus,
 textarea:focus {
   outline: none;
-  border-color: #4a6da8;
+  border-color: var(--accent);
 }
 
-.loading { padding: 2em; color: #666; }
-.error { color: #c22; }
+.loading { padding: 2em; color: var(--muted-2); }
+.error { color: var(--error); }
 
 /* Auth */
 
@@ -130,8 +228,8 @@ textarea:focus {
 .auth-page__note {
   margin-top: 2em;
   padding-top: 1em;
-  border-top: 1px solid #ddd;
-  color: #555;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
   font-size: 0.9em;
   line-height: 1.5;
 }
@@ -142,24 +240,24 @@ textarea:focus {
 .app-home__lookup { display: flex; gap: 0.5em; margin: 1.5em 0; }
 .app-home__lookup input { flex: 1; }
 .app-home__lookup button { padding: 0.5em 1.2em; }
-.app-home__hint { color: #666; font-size: 0.9em; }
+.app-home__hint { color: var(--muted-2); font-size: 0.9em; }
 
 /* Search page (public main area) */
 
 .search-page { padding: 1em 1.5em; overflow: auto; width: 100%; }
 .search-page__form { display: flex; gap: 0.4em; margin-bottom: 1em; }
 .search-page__form input { min-width: 240px; flex: 1; max-width: 400px; }
-.search-page__meta { color: #666; margin: 0 0 1em; }
+.search-page__meta { color: var(--muted-2); margin: 0 0 1em; }
 .search-page__notice {
-  background: #fff8e0;
-  border-left: 3px solid #c8a000;
+  background: var(--notice-bg);
+  border-left: 3px solid var(--notice-border);
   padding: 0.5em 0.75em;
   margin: 0 0 0.75em;
 }
 .search-page__results { list-style: none; padding: 0; margin: 0; }
-.search-page__results li { padding: 0.5em 0; border-bottom: 1px solid #eee; }
-.search-page__snippet { color: #555; margin-left: 0.5em; }
-.search-page__snippet mark { background: #ffd; padding: 0 2px; }
+.search-page__results li { padding: 0.5em 0; border-bottom: 1px solid var(--border-soft); }
+.search-page__snippet { color: var(--muted); margin-left: 0.5em; }
+.search-page__snippet mark { background: var(--mark-bg); padding: 0 2px; }
 
 /* Entry shell: shared layout for editor + public viewer.
    Flex row of a text column (toolbar over content) and a ColumnImagePanel. */
@@ -186,8 +284,8 @@ textarea:focus {
   align-items: center;
   min-height: 2.8em;
   padding: 0.3em 0.8em;
-  background: #f8f8fa;
-  border-bottom: 1px solid #ddd;
+  background: var(--surface-chrome);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -221,7 +319,7 @@ textarea:focus {
 .entry-group__member {
   margin-bottom: 1.4em;
   padding-bottom: 1.15em;
-  border-bottom: 1px solid #b8b8c0;
+  border-bottom: 1px solid var(--border-heavy);
 }
 
 /* Toolbar breadcrumb (shared by editor + public). Sized like a heading; head
@@ -236,14 +334,14 @@ textarea:focus {
   overflow: hidden;
 }
 .entry-breadcrumb__head {
-  color: #666;
+  color: var(--muted-2);
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
-.entry-breadcrumb__sep { color: #aaa; font-weight: 400; flex-shrink: 0; }
+.entry-breadcrumb__sep { color: var(--disabled); font-weight: 400; flex-shrink: 0; }
 .entry-breadcrumb__current {
   white-space: nowrap;
   overflow: hidden;
@@ -261,19 +359,19 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .editor-shell { display: flex; flex-direction: column; height: 100vh; }
 .editor-shell__header {
   padding: 0.3em 0.8em;
-  background: #f2f2f5;
-  border-bottom: 1px solid #ddd;
+  background: var(--surface-header);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 0.8em;
   flex-shrink: 0;
 }
 .editor-shell__spacer { flex: 1; }
-.editor-shell__user { color: #555; font-size: 0.9em; }
+.editor-shell__user { color: var(--muted); font-size: 0.9em; }
 .editor-shell__body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 .editor-shell__main { flex: 1; overflow: hidden; display: flex; min-width: 0; }
 
-.editor-home { padding: 2em; color: #666; }
+.editor-home { padding: 2em; color: var(--muted-2); }
 
 /* Activity page */
 
@@ -282,7 +380,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .activity-page__tabs {
   display: flex;
   gap: 0.4em;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 0.8em;
 }
 .activity-page__tab {
@@ -293,19 +391,19 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   padding: 0.4em 0.8em;
   font: inherit;
   cursor: pointer;
-  color: #557;
+  color: var(--slate);
   margin-bottom: -1px;
 }
-.activity-page__tab:hover { color: #224; }
+.activity-page__tab:hover { color: var(--slate-strong); }
 .activity-page__tab--active {
-  color: #224;
-  border-bottom-color: #559;
+  color: var(--slate-strong);
+  border-bottom-color: var(--slate-accent);
   font-weight: 600;
 }
-.activity-page__error { padding: 0.5em 0.8em; background: #fee; color: #c22; margin-bottom: 0.8em; }
-.activity-page__empty { color: #888; font-style: italic; }
+.activity-page__error { padding: 0.5em 0.8em; background: var(--error-bg); color: var(--error); margin-bottom: 0.8em; }
+.activity-page__empty { color: var(--faint); font-style: italic; }
 .activity-page__list { list-style: none; padding: 0; margin: 0; }
-.activity-page__item { padding: 0.5em 0; border-bottom: 1px solid #eee; }
+.activity-page__item { padding: 0.5em 0; border-bottom: 1px solid var(--border-soft); }
 .activity-page__row {
   display: flex;
   align-items: baseline;
@@ -317,14 +415,14 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   display: flex;
   gap: 0.6em;
   font-size: 0.85em;
-  color: #557;
+  color: var(--slate);
   margin-left: auto;
 }
-.activity-page__time { color: #889; }
-.activity-page__count { color: #889; }
+.activity-page__time { color: var(--slate-faint); }
+.activity-page__count { color: var(--slate-faint); }
 .activity-page__snippet {
   margin-top: 0.2em;
-  color: #555;
+  color: var(--muted);
   font-size: 0.9em;
   white-space: pre-wrap;
   /* Two-line clamp: comments can be long; the activity row should hint, not
@@ -335,7 +433,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   overflow: hidden;
 }
 
-.editor-shell__nav { color: #557; }
+.editor-shell__nav { color: var(--slate); }
 
 /* Generic resize handle */
 
@@ -343,7 +441,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   width: 6px;
   min-width: 6px;
   cursor: col-resize;
-  background: #ccc;
+  background: var(--border-strong);
   flex-shrink: 0;
   align-self: stretch;
   position: relative;
@@ -352,15 +450,15 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   touch-action: none;
 }
 .resize-handle:hover,
-.resize-handle--dragging { background: #888; }
+.resize-handle--dragging { background: var(--faint); }
 
 /* Index panel (always visible in editor) */
 
 .index-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #ddd;
-  background: #fafafa;
+  border-right: 1px solid var(--border);
+  background: var(--surface-raised);
   overflow: hidden;
   flex-shrink: 0;
   min-height: 0;
@@ -370,7 +468,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   flex-direction: column;
   gap: 0.3em;
   padding: 0.5em;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--border-panel);
 }
 .index-panel__search,
 .index-panel__filter {
@@ -379,11 +477,11 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .index-panel__meta {
   padding: 0.3em 0.6em;
   font-size: 0.8em;
-  color: #666;
-  border-bottom: 1px solid #e5e5e5;
+  color: var(--muted-2);
+  border-bottom: 1px solid var(--border-panel);
 }
 .index-panel__list-wrap { flex: 1; min-height: 0; }
-.index-panel__item { border-bottom: 1px solid #eee; }
+.index-panel__item { border-bottom: 1px solid var(--border-soft); }
 .index-panel__item a {
   display: flex;
   align-items: center;
@@ -406,14 +504,14 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   /* Tone down the emoji so it reads as a quiet marker, not a shout. */
   filter: grayscale(0.2);
 }
-.index-panel__item a:hover { background: #eef; text-decoration: none; }
-.index-panel__item--current a { background: #cce5ff; }
+.index-panel__item a:hover { background: var(--tint-blue); text-decoration: none; }
+.index-panel__item--current a { background: var(--selection); }
 .index-panel:focus { outline: none; }
-.index-panel__item--in_progress a { border-left: 3px solid #c80; padding-left: calc(0.6em - 3px); }
-.index-panel__item--approved a { border-left: 3px solid #2a2; padding-left: calc(0.6em - 3px); }
+.index-panel__item--in_progress a { border-left: 3px solid var(--progress); padding-left: calc(0.6em - 3px); }
+.index-panel__item--approved a { border-left: 3px solid var(--approved); padding-left: calc(0.6em - 3px); }
 .index-panel__item--type-primary a { font-weight: 700; }
 .index-panel__item--type-proper .index-panel__label::first-letter { font-weight: 700; }
-.index-panel__item--type-reference a { color: #888; }
+.index-panel__item--type-reference a { color: var(--faint); }
 
 /* Alt-orth rows (secondary <orth>s). Indented only while browsing;
    flush-left while searching, since search results don't always include
@@ -456,16 +554,16 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   background: transparent;
   flex-shrink: 0;
 }
-.entry-editor__save-dot--dirty  { background: #e08a00; }
+.entry-editor__save-dot--dirty  { background: var(--progress-dot); }
 .entry-editor__save-dot--saving {
-  background: #4a6da8;
+  background: var(--accent);
   animation: save-dot-pulse 900ms ease-in-out infinite;
 }
 @keyframes save-dot-pulse {
   0%, 100% { opacity: 0.35; }
   50%      { opacity: 1; }
 }
-.entry-editor__error { padding: 0.5em 1em; background: #fee; color: #c22; }
+.entry-editor__error { padding: 0.5em 1em; background: var(--error-bg); color: var(--error); }
 .entry-editor__panes { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
 /* Inner panes: xml (fixed), preview (flex), image (fixed) */
@@ -506,37 +604,37 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   align-items: center;
   gap: 0.25em;
   padding: 0.4em;
-  background: #fafafa;
-  border-top: 1px solid var(--border, #ddd);
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border);
 }
 .editor-bottom__panel-sep {
   width: 1px;
   align-self: stretch;
-  background: var(--border, #ccc);
+  background: var(--border-strong);
   margin: 0.1em 0.25em;
 }
 .editor-bottom__bar {
   display: flex;
   gap: 0.4em;
   padding: 0.25em 0.4em;
-  border-top: 1px solid var(--border, #ddd);
-  background: var(--toolbar-bg, #f7f7f7);
+  border-top: 1px solid var(--border);
+  background: var(--surface-bar);
 }
 .editor-bottom__toggle {
   font: inherit;
   font-size: 12px;
   padding: 0.2em 0.7em;
-  border: 1px solid var(--border, #ccc);
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   border-radius: 3px;
   cursor: pointer;
-  color: #333;
+  color: var(--ink-soft);
 }
-.editor-bottom__toggle:hover { background: #eef; }
+.editor-bottom__toggle:hover { background: var(--tint-blue); }
 .editor-bottom__toggle--active {
-  background: #e7ecf7;
-  border-color: #99a2c0;
-  color: #1e3a8a;
+  background: var(--accent-tint);
+  border-color: var(--accent-border);
+  color: var(--accent-strong);
 }
 
 /* "Mer ▴" trigger + popup. The trigger reuses .editor-bottom__toggle; the
@@ -554,16 +652,16 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .entry-actions-modal {
   /* Native <dialog> centers itself; we just sit on top of any default and
      fix the look. */
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 1em 1.25em 0.9em;
   max-width: min(900px, 92vw);
   width: 60em;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
 }
 .entry-actions-modal--narrow { width: 32em; }
 .entry-actions-modal::backdrop {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--backdrop);
 }
 .entry-actions-modal__title {
   margin: 0 0 0.5em;
@@ -571,11 +669,11 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 }
 .entry-actions-modal__hint {
   margin: 0 0 0.8em;
-  color: #555;
+  color: var(--muted);
   font-size: 0.92em;
 }
 .entry-actions-modal__hint code {
-  background: #f3f3f3;
+  background: var(--surface-code);
   padding: 0 0.25em;
   border-radius: 2px;
   font-size: 0.92em;
@@ -587,7 +685,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 }
 .entry-actions-modal__col-label {
   font-size: 0.82em;
-  color: #666;
+  color: var(--muted-2);
   margin-bottom: 0.25em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -595,8 +693,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .entry-actions-modal__preview {
   margin: 0;
   padding: 0.5em 0.6em;
-  background: #fafafa;
-  border: 1px solid var(--border, #ddd);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: 3px;
   font-size: 0.85em;
   line-height: 1.35;
@@ -608,10 +706,10 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 .entry-actions-modal__error {
   margin-top: 0.7em;
   padding: 0.5em 0.7em;
-  background: #fdeaea;
-  border: 1px solid #e7a3a3;
+  background: var(--error-bg-strong);
+  border: 1px solid var(--error-border);
   border-radius: 3px;
-  color: #8a1f1f;
+  color: var(--error-text);
   font-size: 0.9em;
 }
 .entry-actions-modal__buttons {
@@ -624,8 +722,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   font: inherit;
   font-size: 13px;
   padding: 0.35em 1em;
-  border: 1px solid var(--border, #ccc);
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   border-radius: 3px;
   cursor: pointer;
 }
@@ -634,16 +732,16 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
    across all interaction states. */
 .entry-actions-modal__buttons .entry-actions-modal__primary,
 .entry-actions-modal__buttons .entry-actions-modal__primary:disabled {
-  background: #2c5da1;
-  border-color: #1e3a8a;
-  color: #fff;
+  background: var(--primary);
+  border-color: var(--accent-strong);
+  color: var(--surface);
   font-weight: 500;
 }
 .entry-actions-modal__buttons .entry-actions-modal__primary:hover:not(:disabled) {
-  background: #224a85;
+  background: var(--primary-hover);
 }
 .entry-actions-modal__buttons .entry-actions-modal__primary:active:not(:disabled) {
-  background: #1c3f73;
+  background: var(--primary-active);
 }
 .entry-actions-modal__buttons button:disabled {
   opacity: 0.6;
@@ -654,15 +752,15 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   font: inherit;
   font-size: 12px;
   padding: 0.18em 0.5em;
-  border: 1px solid var(--border, #ccc);
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   border-radius: 3px;
   cursor: pointer;
-  color: #333;
+  color: var(--ink-soft);
   line-height: 1.3;
 }
-.editor-chip:hover { background: #eef; }
-.editor-chip:active { background: #dde; }
+.editor-chip:hover { background: var(--tint-blue); }
+.editor-chip:active { background: var(--tint-blue-press); }
 .editor-chip--bold { font-weight: bold; }
 .editor-chip--ul   { text-decoration: underline; }
 .editor-chip--it   { font-style: italic; }
@@ -689,13 +787,13 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   font-size: 0.85em;
   font-weight: 500;
   border: 1px solid transparent;
-  background: #f0f0f3;
-  color: #555;
+  background: var(--surface-head);
+  color: var(--muted);
   user-select: none;
 }
-.status-badge--untouched   { background: #f0f0f3; color: #555;  border-color: #d8d8de; }
-.status-badge--in_progress { background: #fff4e0; color: #a65a00; border-color: #f0c98a; }
-.status-badge--approved    { background: #e6f5e6; color: #1e7a1e; border-color: #a8d8a8; }
+.status-badge--untouched   { background: var(--surface-head); color: var(--muted);  border-color: var(--border-badge); }
+.status-badge--in_progress { background: var(--progress-bg); color: var(--progress-text); border-color: var(--progress-border); }
+.status-badge--approved    { background: var(--approved-bg); color: var(--approved-text); border-color: var(--approved-border); }
 
 /* Split-save button: same flat field-style surface as the index panel's
    filter/search and the status filter trigger, so all interactive controls
@@ -723,7 +821,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
 }
-.save-button__caret:disabled .chevron-down { border-color: #c6c6cc; }
+.save-button__caret:disabled .chevron-down { border-color: var(--border-field); }
 /* Shared dropdown menu: used by both the split-save button and the index
    panel's status filter so the two popups feel like the same control type. */
 
@@ -733,10 +831,10 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   list-style: none;
   margin: 0;
   padding: 0.3em 0;
-  background: #fff;
-  border: 1px solid #c6c6cc;
+  background: var(--surface);
+  border: 1px solid var(--border-field);
   border-radius: 4px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-menu);
   min-width: 12em;
   animation: dropdown-menu-in 90ms ease-out;
 }
@@ -752,12 +850,12 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   background: transparent;
   border: 0;
   font: inherit;
-  color: #222;
+  color: var(--ink);
   cursor: pointer;
 }
-.dropdown-menu__item:hover:not(:disabled) { background: #eef2fb; color: #1e3a8a; }
-.dropdown-menu__item:disabled { color: #aaa; cursor: default; }
-.dropdown-menu__item--current { background: #f4f6fb; font-weight: 600; }
+.dropdown-menu__item:hover:not(:disabled) { background: var(--accent-tint-2); color: var(--accent-strong); }
+.dropdown-menu__item:disabled { color: var(--disabled); cursor: default; }
+.dropdown-menu__item--current { background: var(--accent-tint-3); font-weight: 600; }
 
 /* Save-button-specific menu placement (anchored to the right of the split). */
 .save-button__menu { top: calc(100% + 4px); right: 0; min-width: 15em; }
@@ -775,16 +873,16 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   font: inherit;
   text-align: left;
   padding: 0.3em 0.5em;
-  background: #fff;
-  color: #222;
-  border: 1px solid #c6c6cc;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-field);
   border-radius: 4px;
   cursor: pointer;
   box-sizing: border-box;
   transition: background 80ms ease;
 }
-.status-filter__trigger:hover { background: #fafafd; }
-.status-filter__trigger[aria-expanded='true'] { border-color: #4a6da8; }
+.status-filter__trigger:hover { background: var(--surface-tint); }
+.status-filter__trigger[aria-expanded='true'] { border-color: var(--accent); }
 .status-filter__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .status-filter__menu { top: calc(100% + 4px); left: 0; right: 0; }
 
@@ -794,22 +892,22 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   flex-shrink: 0;
   width: 0.42em;
   height: 0.42em;
-  border-right: 1.2px solid #4a6da8;
-  border-bottom: 1.2px solid #4a6da8;
+  border-right: 1.2px solid var(--accent);
+  border-bottom: 1.2px solid var(--accent);
   transform: translateY(-25%) rotate(45deg);
 }
 
 /* Comments toggle (in toolbar): inherits the base button look; only the
    "has comments" / "open" affordance modifiers add their own colours. */
 
-.entry-editor__comments-toggle--has { border-color: #88a; background: #eef; }
-.entry-editor__comments-toggle--open { background: #dde; border-color: #559; }
+.entry-editor__comments-toggle--has { border-color: var(--slate-accent-soft); background: var(--tint-blue); }
+.entry-editor__comments-toggle--open { background: var(--tint-blue-press); border-color: var(--slate-accent); }
 
 /* Comments panel: slides in between toolbar and panes */
 
 .comments-panel {
-  border-bottom: 1px solid #ccd;
-  background: #fafaff;
+  border-bottom: 1px solid var(--border-comments);
+  background: var(--surface-comments);
   display: flex;
   flex-direction: column;
   max-height: 40%;
@@ -819,8 +917,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   padding: 0.3em 0.8em;
-  background: #eef;
-  border-bottom: 1px solid #ddf;
+  background: var(--tint-blue);
+  border-bottom: 1px solid var(--border-comments-tint);
   flex-shrink: 0;
 }
 .comments-panel__title { flex: 1; font-weight: 600; font-size: 0.95em; }
@@ -831,18 +929,18 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   line-height: 1;
   cursor: pointer;
   padding: 0 0.3em;
-  color: #557;
+  color: var(--slate);
 }
-.comments-panel__close:hover { color: #224; }
+.comments-panel__close:hover { color: var(--slate-strong); }
 .comments-panel__error {
   padding: 0.3em 0.8em;
-  background: #fee;
-  color: #c22;
+  background: var(--error-bg);
+  color: var(--error);
   font-size: 0.9em;
 }
 .comments-panel__compose {
   padding: 0.5em 0.8em;
-  border-top: 1px solid #e5e5f0;
+  border-top: 1px solid var(--border-comments-soft);
   flex-shrink: 0;
 }
 .comments-panel__textarea {
@@ -866,37 +964,37 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
 }
 .comments-panel__empty {
   padding: 0.6em 0.8em;
-  color: #888;
+  color: var(--faint);
   font-style: italic;
 }
 .comments-panel__item {
   padding: 0.5em 0.8em;
-  border-bottom: 1px solid #eef;
+  border-bottom: 1px solid var(--tint-blue);
 }
 .comments-panel__meta {
   display: flex;
   gap: 0.6em;
   font-size: 0.85em;
-  color: #557;
+  color: var(--slate);
   margin-bottom: 0.2em;
 }
 .comments-panel__author { font-weight: 600; }
-.comments-panel__time { color: #889; }
+.comments-panel__time { color: var(--slate-faint); }
 .comments-panel__body { white-space: pre-wrap; }
 
 /* Lock indicator */
 
-.lock-indicator { padding: 0.4em 0.8em; font-size: 0.9em; background: #fff3e0; color: #a60; }
+.lock-indicator { padding: 0.4em 0.8em; font-size: 0.9em; background: var(--lock-bg); color: var(--lock-text); }
 
 /* Prev/next nav */
 
 .prev-next-nav { display: flex; gap: 0.6em; }
-.prev-next-nav__disabled { color: #bbb; }
+.prev-next-nav__disabled { color: var(--disabled-2); }
 
 /* Column image panel */
 
 .column-panel {
-  background: #f9f9f9;
+  background: var(--surface-panel);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -910,8 +1008,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   gap: 0.4em;
   min-height: 2.8em;
   padding: 0.3em 0.8em;
-  background: #f8f8fa;
-  border-bottom: 1px solid #ddd;
+  background: var(--surface-chrome);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .column-panel__label { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; }
@@ -933,18 +1031,18 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   padding: 0 0.3em;
 }
 .column-panel__label-input--invalid {
-  border-color: #c22;
-  background: #fee;
+  border-color: var(--error);
+  background: var(--error-bg);
 }
 .column-panel__nav {
   border: none;
   background: none;
   font-size: 1.1em;
   padding: 0 0.3em;
-  color: #333;
+  color: var(--ink-soft);
   cursor: pointer;
 }
-.column-panel__nav:hover { color: #000; }
+.column-panel__nav:hover { color: var(--ink-strong); }
 .column-panel__img-container { flex: 1; overflow: auto; position: relative; }
 .column-panel__img { width: 100%; display: block; }
 .column-panel__img--clickable { cursor: pointer; }
@@ -952,7 +1050,7 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   position: absolute;
   left: 0;
   right: 0;
-  background: rgba(112, 40, 149, 0.2);
+  background: var(--orth-marker);
   pointer-events: none;
 }
 
@@ -970,8 +1068,8 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   display: none;
   position: relative;
   padding: 0.4em 0.6em;
-  background: #f8f8fa;
-  border-bottom: 1px solid #ddd;
+  background: var(--surface-chrome);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 25;
 }
@@ -1001,20 +1099,307 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   display: block;
   padding: 0.55em 0.8em;
   color: inherit;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-soft);
 }
 .mobile-search__item a:hover,
-.mobile-search__item a:focus { background: #eef; text-decoration: none; }
+.mobile-search__item a:focus { background: var(--tint-blue); text-decoration: none; }
 .mobile-search__item--alt a { font-style: italic; padding-left: 1.6em; }
 .mobile-search__empty,
 .mobile-search__overflow {
   padding: 0.55em 0.8em;
-  color: #888;
+  color: var(--faint);
   font-style: italic;
 }
 
-/* Public reader: condensed layout below 720px (phones). */
+/* Segmented XML / Förhandsvy / Bild toggle. Hidden on desktop (all three
+   panes are visible side-by-side anyway); shown at ≤720px in the editor. */
+.entry-editor__view-toggle { display: none; }
+.entry-editor__view-toggle-btn {
+  border: 1px solid var(--border-field);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  padding: 0.25em 0.55em;
+  font: inherit;
+  font-size: 1.05em;
+  line-height: 1;
+  border-radius: 0;
+  margin-left: -1px; /* collapse adjacent borders into a single seam */
+}
+a.entry-editor__view-toggle-btn:hover { text-decoration: none; background: var(--surface-tint); }
+.entry-editor__view-toggle-btn:first-child {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  margin-left: 0;
+}
+.entry-editor__view-toggle-btn:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+.entry-editor__view-toggle-btn--active {
+  background: var(--tint-blue-press);
+  border-color: var(--slate-accent);
+  z-index: 1;
+}
+/* Stylise </> to feel like an icon rather than running text: monospace,
+   blue, slightly tighter so its visual weight matches the emoji glyphs. */
+.entry-editor__view-icon--code { color: var(--link); }
+
+/* Editor: toolbar-only condensing below 1100px. The toolbar gets crowded
+   well before the rest of the editor stops fitting, so we collapse just the
+   toolbar (status pill → coloured border, breadcrumb head, comments label,
+   SaveButton padding) earlier — at tablet width. */
+@media (max-width: 1100px) {
+  .editor-shell--editor .hide-on-mobile { display: none; }
+  .editor-shell--editor .show-on-mobile { display: inline; }
+
+  .editor-shell--editor .entry-breadcrumb__head,
+  .editor-shell--editor .entry-breadcrumb__sep { display: none; }
+
+  .editor-shell--editor .entry-shell__toolbar .status-badge { display: none; }
+  .editor-shell--editor .entry-shell__toolbar { border-left: 4px solid transparent; }
+  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--in_progress) { border-left-color: var(--progress); }
+  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--approved)    { border-left-color: var(--approved); }
+
+  .editor-shell--editor .save-button__primary,
+  .editor-shell--editor .save-button__caret { padding-top: 0.25em; padding-bottom: 0.25em; }
+  .editor-shell--editor .save-button__primary { padding-left: 0.6em; padding-right: 0.6em; }
+}
+
+/* History toolbar link: matches the comments-toggle button look so it sits
+   alongside it as a peer affordance. */
+
+.entry-editor__history-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.3em 0.9em;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border-field);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 80ms ease;
+}
+.entry-editor__history-link:hover { background: var(--surface-tint); text-decoration: none; }
+.entry-editor__history-link:active { background: var(--surface-pressed); }
+
+/* Activity page: link version of the revision count. Inherits the muted
+   colour and only underlines on hover so it looks like quiet metadata. */
+.activity-page__count--link { color: var(--slate-faint); text-decoration: none; }
+.activity-page__count--link:hover { color: var(--link); text-decoration: underline; }
+
+/* Entry history page */
+
+.entry-history {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.entry-history__toolbar {
+  display: flex;
+  gap: 0.8em;
+  align-items: center;
+  min-height: 2.8em;
+  padding: 0.3em 0.8em;
+  background: var(--surface-chrome);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.entry-history__title {
+  font-weight: 600;
+  color: var(--slate);
+}
+.entry-history__spacer { flex: 1; }
+.entry-history__back {
+  text-decoration: none;
+  color: var(--link);
+}
+.entry-history__back:hover { text-decoration: underline; }
+.entry-history__body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-history__diff {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-history__empty,
+.entry-history__loading {
+  padding: 1em 1.2em;
+  color: var(--faint);
+  font-style: italic;
+}
+.entry-history__error {
+  padding: 0.5em 1em;
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+/* Revision timeline (left column of the history page) */
+
+.revision-timeline {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface-tint);
+  overflow: hidden;
+  min-height: 0;
+}
+/* Font-size lives on the inline labels, not the container, so the em-sized
+   grid columns line up with the rows below. min-height matches the diff
+   header's so the two bands read as a single chrome layer. */
+.revision-timeline__head {
+  display: grid;
+  grid-template-columns: 2em 2em 1fr;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.4em 0.8em;
+  min-height: 2.2em;
+  background: var(--surface-head);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.revision-timeline__head-radio,
+.revision-timeline__head-label {
+  font-size: 0.66em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate);
+  font-weight: 600;
+}
+.revision-timeline__head-radio { text-align: center; }
+.revision-timeline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.revision-timeline__row {
+  display: grid;
+  grid-template-columns: 2em 2em 1fr;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.4em 0.8em;
+  border-bottom: 1px solid var(--border-timeline);
+}
+.revision-timeline__row--before,
+.revision-timeline__row--after { background: var(--selection-soft); }
+.revision-timeline__row input[type='radio'] { justify-self: center; }
+/* visibility:hidden keeps the grid cell so columns stay aligned. */
+.revision-timeline__row input[type='radio']:disabled { visibility: hidden; }
+.revision-timeline__meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+}
+.revision-timeline__line {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+}
+.revision-timeline__line--primary { font-size: 0.92em; }
+.revision-timeline__line--secondary { font-size: 0.85em; color: var(--slate); }
+.revision-timeline__label {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.revision-timeline__author {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Revision diff (right column of the history page) */
+
+.revision-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Font-size lives on inner spans so the wrapper's em units match the
+   timeline head's at base scale. */
+.revision-diff__header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface-head);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 2.2em;
+}
+.revision-diff__header-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding: 0.4em 0.8em;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+  font-weight: 600;
+  color: var(--slate);
+}
+.revision-diff__header-cell:last-child { border-right: 0; }
+.revision-diff__header-side {
+  font-size: 0.66em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate);
+  flex-shrink: 0;
+}
+.revision-diff__header-detail {
+  font-size: 0.85em;
+  font-weight: 400;
+  color: var(--slate-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.revision-diff__merge {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.revision-diff__merge .cm-mergeView { height: 100%; }
+/* Each cell's `overflow: hidden` (from the package) would otherwise clip
+   long content and stop .cm-mergeView from seeing the overflow it needs to
+   scroll. */
+.revision-diff__merge .cm-mergeView .cm-mergeViewEditor { overflow: visible !important; }
+/* Bottom rule closes off the editor when content is shorter than the pane;
+   for long content it sits at the scroll bottom, only visible when fully
+   scrolled. */
+.revision-diff__merge .cm-editor {
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ============================ Phone layout ============================
+   THE phone breakpoint. CSS cannot put a custom property inside a media
+   condition, so 720px is declared once, here, for the whole app. (The
+   editor's earlier toolbar-only condensing at 1100px lives above.) */
 @media (max-width: 720px) {
+/* Public reader: condensed layout below 720px (phones). */
   .editor-shell--public .mobile-search { display: block; }
   .editor-shell--public .hide-on-mobile { display: none; }
   .editor-shell--public .show-on-mobile { display: inline; }
@@ -1043,45 +1428,9 @@ a.entry-breadcrumb__current:hover { text-decoration: underline; }
   .editor-shell--public .entry-breadcrumb__sep { display: none; }
 
   .editor-shell--public .entry-view__content { padding: 0.5em 0.6em; }
-}
-
-/* Segmented XML / Förhandsvy / Bild toggle. Hidden on desktop (all three
-   panes are visible side-by-side anyway); shown at ≤720px in the editor. */
-.entry-editor__view-toggle { display: none; }
-.entry-editor__view-toggle-btn {
-  border: 1px solid #c6c6cc;
-  background: #fff;
-  color: #222;
-  text-decoration: none;
-  padding: 0.25em 0.55em;
-  font: inherit;
-  font-size: 1.05em;
-  line-height: 1;
-  border-radius: 0;
-  margin-left: -1px; /* collapse adjacent borders into a single seam */
-}
-a.entry-editor__view-toggle-btn:hover { text-decoration: none; background: #fafafd; }
-.entry-editor__view-toggle-btn:first-child {
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
-  margin-left: 0;
-}
-.entry-editor__view-toggle-btn:last-child {
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
-}
-.entry-editor__view-toggle-btn--active {
-  background: #dde;
-  border-color: #559;
-  z-index: 1;
-}
-/* Stylise </> to feel like an icon rather than running text: monospace,
-   blue, slightly tighter so its visual weight matches the emoji glyphs. */
-.entry-editor__view-icon--code { color: #1a4fb5; }
 
 /* Editor: layout-level condensing below 720px (sidebar, header tighten,
    stack panes) — same threshold as the public reader. */
-@media (max-width: 720px) {
   .editor-shell--editor .mobile-search { display: block; }
 
   .editor-shell--editor .editor-shell__header { padding: 0.3em 0.6em; }
@@ -1140,266 +1489,15 @@ a.entry-editor__view-toggle-btn:hover { text-decoration: none; background: #fafa
     min-height: 0;
     border-bottom: 0;
   }
-}
-
-/* Editor: toolbar-only condensing below 1100px. The toolbar gets crowded
-   well before the rest of the editor stops fitting, so we collapse just the
-   toolbar (status pill → coloured border, breadcrumb head, comments label,
-   SaveButton padding) earlier — at tablet width. */
-@media (max-width: 1100px) {
-  .editor-shell--editor .hide-on-mobile { display: none; }
-  .editor-shell--editor .show-on-mobile { display: inline; }
-
-  .editor-shell--editor .entry-breadcrumb__head,
-  .editor-shell--editor .entry-breadcrumb__sep { display: none; }
-
-  .editor-shell--editor .entry-shell__toolbar .status-badge { display: none; }
-  .editor-shell--editor .entry-shell__toolbar { border-left: 4px solid transparent; }
-  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--in_progress) { border-left-color: #c80; }
-  .editor-shell--editor .entry-shell__toolbar:has(.status-badge--approved)    { border-left-color: #2a2; }
-
-  .editor-shell--editor .save-button__primary,
-  .editor-shell--editor .save-button__caret { padding-top: 0.25em; padding-bottom: 0.25em; }
-  .editor-shell--editor .save-button__primary { padding-left: 0.6em; padding-right: 0.6em; }
-}
-
-/* History toolbar link: matches the comments-toggle button look so it sits
-   alongside it as a peer affordance. */
-
-.entry-editor__history-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  padding: 0.3em 0.9em;
-  background: #fff;
-  color: #222;
-  border: 1px solid #c6c6cc;
-  border-radius: 4px;
-  text-decoration: none;
-  transition: background 80ms ease;
-}
-.entry-editor__history-link:hover { background: #fafafd; text-decoration: none; }
-.entry-editor__history-link:active { background: #eef0f5; }
-
-/* Activity page: link version of the revision count. Inherits the muted
-   colour and only underlines on hover so it looks like quiet metadata. */
-.activity-page__count--link { color: #889; text-decoration: none; }
-.activity-page__count--link:hover { color: #1a4fb5; text-decoration: underline; }
-
-/* Entry history page */
-
-.entry-history {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.entry-history__toolbar {
-  display: flex;
-  gap: 0.8em;
-  align-items: center;
-  min-height: 2.8em;
-  padding: 0.3em 0.8em;
-  background: #f8f8fa;
-  border-bottom: 1px solid #ddd;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-.entry-history__title {
-  font-weight: 600;
-  color: #557;
-}
-.entry-history__spacer { flex: 1; }
-.entry-history__back {
-  text-decoration: none;
-  color: #1a4fb5;
-}
-.entry-history__back:hover { text-decoration: underline; }
-.entry-history__body {
-  display: flex;
-  flex-direction: row;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.entry-history__diff {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-.entry-history__empty,
-.entry-history__loading {
-  padding: 1em 1.2em;
-  color: #888;
-  font-style: italic;
-}
-.entry-history__error {
-  padding: 0.5em 1em;
-  background: #fee;
-  color: #c22;
-}
-
-/* Revision timeline (left column of the history page) */
-
-.revision-timeline {
-  width: 260px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid #ddd;
-  background: #fafafd;
-  overflow: hidden;
-  min-height: 0;
-}
-/* Font-size lives on the inline labels, not the container, so the em-sized
-   grid columns line up with the rows below. min-height matches the diff
-   header's so the two bands read as a single chrome layer. */
-.revision-timeline__head {
-  display: grid;
-  grid-template-columns: 2em 2em 1fr;
-  gap: 0.3em;
-  align-items: center;
-  padding: 0.4em 0.8em;
-  min-height: 2.2em;
-  background: #f0f0f3;
-  border-bottom: 1px solid #ddd;
-  flex-shrink: 0;
-}
-.revision-timeline__head-radio,
-.revision-timeline__head-label {
-  font-size: 0.66em;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #557;
-  font-weight: 600;
-}
-.revision-timeline__head-radio { text-align: center; }
-.revision-timeline__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-.revision-timeline__row {
-  display: grid;
-  grid-template-columns: 2em 2em 1fr;
-  gap: 0.3em;
-  align-items: center;
-  padding: 0.4em 0.8em;
-  border-bottom: 1px solid #d4d8e0;
-}
-.revision-timeline__row--before,
-.revision-timeline__row--after { background: #e6f3ff; }
-.revision-timeline__row input[type='radio'] { justify-self: center; }
-/* visibility:hidden keeps the grid cell so columns stay aligned. */
-.revision-timeline__row input[type='radio']:disabled { visibility: hidden; }
-.revision-timeline__meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1em;
-}
-.revision-timeline__line {
-  display: flex;
-  align-items: center;
-  gap: 0.4em;
-  min-width: 0;
-}
-.revision-timeline__line--primary { font-size: 0.92em; }
-.revision-timeline__line--secondary { font-size: 0.85em; color: #557; }
-.revision-timeline__label {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.revision-timeline__author {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-/* Revision diff (right column of the history page) */
-
-.revision-diff {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-/* Font-size lives on inner spans so the wrapper's em units match the
-   timeline head's at base scale. */
-.revision-diff__header {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: #f0f0f3;
-  border-bottom: 1px solid #ddd;
-  flex-shrink: 0;
-  min-height: 2.2em;
-}
-.revision-diff__header-cell {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5em;
-  padding: 0.4em 0.8em;
-  border-right: 1px solid #ddd;
-  min-width: 0;
-  font-weight: 600;
-  color: #557;
-}
-.revision-diff__header-cell:last-child { border-right: 0; }
-.revision-diff__header-side {
-  font-size: 0.66em;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #557;
-  flex-shrink: 0;
-}
-.revision-diff__header-detail {
-  font-size: 0.85em;
-  font-weight: 400;
-  color: #224;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.revision-diff__merge {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.revision-diff__merge .cm-mergeView { height: 100%; }
-/* Each cell's `overflow: hidden` (from the package) would otherwise clip
-   long content and stop .cm-mergeView from seeing the overflow it needs to
-   scroll. */
-.revision-diff__merge .cm-mergeView .cm-mergeViewEditor { overflow: visible !important; }
-/* Bottom rule closes off the editor when content is shorter than the pane;
-   for long content it sits at the scroll bottom, only visible when fully
-   scrolled. */
-.revision-diff__merge .cm-editor {
-  font-size: 13px;
-  border-bottom: 1px solid #ddd;
-}
 
 /* History page: below 720px the 260px timeline crowds out the diff, so we
    stack vertically. The timeline gets a capped slice (rest scrolls) so the
    diff keeps the bulk of the viewport. */
-@media (max-width: 720px) {
   .entry-history__body { flex-direction: column; }
   .revision-timeline {
     width: auto;
     max-height: 10.5em;
     border-right: 0;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border);
   }
 }
